@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mapbox_maps_options">
+        {
+            "textureMode": true,
+            "prefetchZoomDelta": 2,
+            "prefetchBuffer": true,
+            "antialiasingSampleCount": 1
+        }
+    </string>
+</resources> 

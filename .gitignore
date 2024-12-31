@@ -2,19 +2,19 @@
 .env
 lib/config/env_config.dart
 lib/config/supabase_config.dart
-android/app/src/main/AndroidManifest.xml
 scripts/config.py
+**/google-services.json
 
-# Keep example files
+# Keep examples
 !.env.example
 !lib/config/*.example.dart
-!android/app/src/main/AndroidManifest.example.xml
 
 # Data files
 *.jsonl
 *.sql
 training_data_*
 !scripts/example_data/*.jsonl
+!supabase/examples/*.sql
 
 # Python
 __pycache__/

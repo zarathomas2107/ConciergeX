@@ -1,0 +1,30 @@
+name: conciergex
+description: conciergex web app 
+
+environment:
+  sdk: '^3.6.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.8.2
+  flutter_dotenv: ^5.0.2
+  intl: ^0.20.1
+  dart_openai: ^5.0.0
+  geolocator: ^13.0.2
+  mapbox_maps_flutter: ^2.5.0  # Update to latest version
+  google_maps_flutter: ^2.5.3  # Latest stable version
+  google_maps_utils: ^1.5.1
+  app_links: ^3.4.1  # Downgrade to a more stable version
+
+flutter:
+  assets:
+    - .env
+    - assets/icon/
+    - assets/Icons/
+
+version: 1.0.0+1
+
+dev_dependencies:
+  flutter_launcher_icons: ^0.13.1
