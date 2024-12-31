@@ -1,26 +1,33 @@
-# Sensitive files
+# Sensitive Python scripts
+scripts/cinema_data_sync.py
+scripts/fetch_soho_restaurants.py
+scripts/fetch_restaurant_details.py
+scripts/soho_theatres.py
+scripts/theatre_restaurant_directions.py
+scripts/menus_download.py
+scripts/run_finetuned_model.py
+scripts/openai_finetuning_check.py
+scripts/populate_london_areas.py
+
+# Sensitive data files
+*.jsonl
+training_data_*.jsonl
+*profiles_rows.sql
+*.log
+
+# Environment files
 .env
+.env.*
+!.env.example
+
+# Flutter sensitive configs
 lib/config/env_config.dart
 lib/config/supabase_config.dart
-scripts/config.py
-**/google-services.json
+android/app/src/main/AndroidManifest.xml
 
 # Keep examples
-!.env.example
 !lib/config/*.example.dart
-
-# Data files
-*.jsonl
-*.sql
-training_data_*
-!scripts/example_data/*.jsonl
-!supabase/examples/*.sql
-
-# Python
-__pycache__/
-*.pyc
-venv/
-.venv/
+!android/app/src/main/AndroidManifest.example.xml
 
 # Flutter/Dart
 .dart_tool/
@@ -31,8 +38,7 @@ ios/Pods/
 .pub-cache/
 .pub/
 
-# IDE and logs
+# IDE
 .idea/
 .vscode/
 *.iml
-*.log
