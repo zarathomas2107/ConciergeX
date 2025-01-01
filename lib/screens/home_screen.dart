@@ -52,154 +52,93 @@ class HomeScreenState extends State<HomeScreen> {
     setState(() => _isSearching = true);
 
     try {
-      final response = await _aiService.processSearchQuery(query);
-      final aiResponse = response['response'] as String;
-      final jsonResponse = json.decode(aiResponse);
-      
-      // Get venue coordinates if available
-      double? venueLat, venueLon;
-      final location = jsonResponse['location'] as String;
-      
-      if (jsonResponse['venue_name'] != null) {
-        // Try to get venue coordinates first
-        final defaultCoords = locationCoords['Covent Garden']!;
-        final coords = locationCoords[location] ?? defaultCoords;
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId != null) {
+        final response = await _aiService.processSearchQuery(query, userId);
         
-        final venues = await _aiService.getNearbyVenues(
-          coords['lat']!, 
-          coords['lon']!,
-          venueName: jsonResponse['venue_name'],
-        );
+        // Get venue coordinates if available
+        double? venueLat, venueLon;
+        final location = response['location'] as String? ?? 'Covent Garden';
         
-        if (venues.isNotEmpty) {
-          final venue = venues.first;
-          venueLat = venue['latitude'] as double;
-          venueLon = venue['longitude'] as double;
-          print('Using venue coordinates: ${venue['name']} at (${venueLat}, ${venueLon})');
+        if (response['venue_name'] != null) {
+          // Try to get venue coordinates first
+          final defaultCoords = locationCoords['Covent Garden']!;
+          final coords = locationCoords[location] ?? defaultCoords;
+          
+          try {
+            final venues = await _aiService.getNearbyVenues(
+              coords['lat']!, 
+              coords['lon']!,
+              venueName: response['venue_name'] as String,
+            );
+            
+            if (venues.isNotEmpty) {
+              final venue = venues.first;
+              venueLat = venue['latitude'] as double?;
+              venueLon = venue['longitude'] as double?;
+              if (venueLat != null && venueLon != null) {
+                print('Using venue coordinates: ${venue['name']} at (${venueLat}, ${venueLon})');
+              }
+            }
+          } catch (e) {
+            print('Error finding venue: $e');
+          }
         }
-      }
-      
-      // If no venue found or no venue specified, use location coordinates
-      if (venueLat == null || venueLon == null) {
-        final coords = locationCoords[location] ?? locationCoords['Covent Garden']!;
-        venueLat = coords['lat'];
-        venueLon = coords['lon'];
-        print('Using location coordinates for $location: ($venueLat, $venueLon)');
-      }
+        
+        // If no venue found or no venue specified, use location coordinates
+        if (venueLat == null || venueLon == null) {
+          final coords = locationCoords[location] ?? locationCoords['Covent Garden']!;
+          venueLat = coords['lat'];
+          venueLon = coords['lon'];
+          print('Using location coordinates for $location: ($venueLat, $venueLon)');
+        }
 
-      if (jsonResponse.containsKey('restaurants') && 
-          jsonResponse['restaurants'] is List && 
-          (jsonResponse['restaurants'] as List).isNotEmpty) {
-        
-        final restaurants = (jsonResponse['restaurants'] as List)
-            .map((json) {
-              // Always calculate distance since we now always have coordinates
-              final restaurantLat = json['Latitude'] as double;
-              final restaurantLon = json['Longitude'] as double;
-              
-              final distance = calculateDistance(
-                venueLat!, 
-                venueLon!, 
-                restaurantLat, 
-                restaurantLon
-              );
-              
-              final reference = jsonResponse['venue_name'] ?? location;
-              print('Calculated distance for ${json['Name']}: ${distance.round()}m from $reference');
-              
-              json['distance'] = distance;
-              return Restaurant.fromSupabase(json);
-            })
-            .toList();
-        
-        // Always sort by distance since we always have it now
+        // Search for restaurants
+        final results = await _aiService.searchRestaurants(
+          searchTerm: response['cuisine_type'] ?? query,
+          groupIds: List<String>.from(response['group_ids'] ?? []),
+          userPreferences: null, // Add user preferences if needed
+        );
+
+        // Convert results to Restaurant objects and calculate distances
+        final restaurants = results.map((json) {
+          if (json['Latitude'] != null && json['Longitude'] != null) {
+            final distance = _aiService.calculateDistance(
+              venueLat!,
+              venueLon!,
+              json['Latitude'] as double,
+              json['Longitude'] as double
+            );
+            json['distance'] = distance;
+          }
+          print('Loading restaurants with data: $json');
+          final restaurant = Restaurant.fromJson(json);
+          print('Created restaurant with ID: ${restaurant.restaurantId}');
+          return restaurant;
+        }).toList();
+
+        // Sort by distance
         restaurants.sort((a, b) => 
           (a.distance ?? double.infinity)
           .compareTo(b.distance ?? double.infinity)
         );
-        
+
         setState(() {
           _filteredRestaurants = restaurants;
           _isSearching = false;
         });
-        return;
-      }
 
-      // If no restaurants in AI response, fall back to the existing logic
-      final cuisineType = jsonResponse['cuisine_type'] as String;
-      final similarTo = jsonResponse['similar_to'] as String?;
-      final venueName = jsonResponse['venue_name'] as String?;
-
-      List<Map<String, dynamic>> results;
-
-      if (similarTo != null) {
-        // First find the restaurant ID for the reference restaurant
-        final refRestaurant = await _supabase
-            .from('restaurants')
-            .select()
-            .ilike('Name', similarTo)
-            .single();
-            
-        if (refRestaurant != null) {
-          results = await _aiService.getSimilarRestaurants(refRestaurant['RestaurantID']);
-        } else {
-          results = [];
+        // Debug print
+        for (var restaurant in restaurants) {
+          print('Restaurant: ${restaurant.name}, Distance: ${restaurant.distance}m');
         }
-      } else {
-        // Default coordinates for different locations
-        final Map<String, Map<String, double>> locationCoords = {
-          'Covent Garden': {'lat': 51.5117, 'lon': -0.1240},
-          'Soho': {'lat': 51.5137, 'lon': -0.1337},
-        };
-
-        // Get coordinates with null safety
-        final defaultCoords = locationCoords['Covent Garden']!;
-        final coords = Map<String, double>.from(
-          locationCoords[location] ?? defaultCoords
-        );
-        
-        if (venueName != null) {
-          // Get nearby venues first
-          final venues = await _aiService.getNearbyVenues(
-            coords['lat']!, 
-            coords['lon']!,
-            venueName: venueName,
-          );
-          if (venues.isNotEmpty) {
-            // Use the closest matching venue's coordinates
-            final venue = venues.first;
-            coords['lat'] = venue['latitude'] as double;
-            coords['lon'] = venue['longitude'] as double;
-            
-            print('Found venue: ${venue['name']} at distance: ${venue['distance']} meters');
-          } else {
-            print('No matching venues found near the coordinates');
-          }
-        }
-        
-        // Query nearby restaurants
-        results = await _supabase
-            .rpc('nearby_restaurants', params: {
-              'ref_lat': coords['lat']!,
-              'ref_lon': coords['lon']!,
-              'radius_meters': 1000.0,
-            });
       }
-
-      // Filter by cuisine type if specified
-      var filteredResults = results.where((r) => 
-        r['CuisineType'].toString().toLowerCase() == cuisineType.toLowerCase()
-      ).toList();
-
-      setState(() {
-        _filteredRestaurants = filteredResults
-            .map((json) => Restaurant.fromSupabase(json))
-            .toList();
-        _isSearching = false;
-      });
     } catch (e) {
       print('Error filtering restaurants: $e');
-      setState(() => _isSearching = false);
+      setState(() {
+        _filteredRestaurants = [];
+        _isSearching = false;
+      });
     }
   }
 
@@ -230,52 +169,67 @@ class HomeScreenState extends State<HomeScreen> {
     return R * c; // Distance in meters
   }
 
+  Future<void> _performSearch(String query) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId != null) {
+      final response = await _aiService.processSearchQuery(query, userId);
+      // ... rest of the search logic
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
-              itemCount: _filteredRestaurants.length,
-              itemBuilder: (context, index) {
-                final restaurant = _filteredRestaurants[index];
-                return RestaurantCard(
-                  restaurant: restaurant,
-                  onTap: () {
-                    // Handle restaurant selection
-                  },
-                );
-              },
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Search Bar - now at the top with proper styling
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search restaurants...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  prefixIcon: const Icon(Icons.search),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
-              ],
-            ),
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search restaurants...',
-                border: OutlineInputBorder(),
-                prefixIcon: null,
-                suffixIcon: null,
-                icon: null,
+                onSubmitted: _filterRestaurants,
+                textInputAction: TextInputAction.search,
               ),
-              onSubmitted: _filterRestaurants,
-              textInputAction: TextInputAction.search,
             ),
-          ),
-        ],
+            
+            // Loading indicator or results
+            Expanded(
+              child: _isSearching 
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredRestaurants.isEmpty
+                  ? const Center(
+                      child: Text('No restaurants found. Try a different search.'),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      itemCount: _filteredRestaurants.length,
+                      itemBuilder: (context, index) {
+                        final restaurant = _filteredRestaurants[index];
+                        return RestaurantCard(
+                          restaurant: restaurant,
+                          onTap: () {
+                            // Handle restaurant selection
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

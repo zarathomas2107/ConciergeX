@@ -28,7 +28,7 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       final supabase = Supabase.instance.client;
       
-      debugPrint('Attempting signup with email: ${_emailController.text.trim()}');
+      debugPrint('Attempting signup...');
       
       final authResponse = await supabase.auth.signUp(
         email: _emailController.text.trim(),
@@ -37,14 +37,32 @@ class _SignupScreenState extends State<SignupScreen> {
           'first_name': _firstNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
         },
+        emailRedirectTo: 'com.zarathomasdev.conciergex://login-callback?type=recovery',
       );
 
-      debugPrint('Auth Response: $authResponse');
-      debugPrint('User: ${authResponse.user}');
-      debugPrint('Session: ${authResponse.session}');
+      debugPrint('Signup response: ${authResponse.user?.email}');
 
       if (mounted) {
         if (authResponse.user != null) {
+          try {
+            // Check if preferences already exist
+            final existing = await supabase
+                .from('user_dietary_requirements')
+                .select()
+                .eq('user_id', authResponse.user!.id)
+                .single();
+            
+            if (existing == null) {
+              // Create preferences only if they don't exist
+              await supabase
+                  .from('user_dietary_requirements')
+                  .insert({'user_id': authResponse.user!.id});
+            }
+          } catch (e) {
+            debugPrint('Error handling preferences: $e');
+            // Continue with signup flow even if preferences creation fails
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please check your email for verification link'),
@@ -53,30 +71,16 @@ class _SignupScreenState extends State<SignupScreen> {
           );
           Navigator.of(context).pushReplacementNamed('/verification-pending');
         } else {
-          setState(() {
-            _error = 'Signup failed: No user returned';
-          });
+          setState(() => _error = 'Signup failed: No user returned');
         }
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('Error during signup: $e');
-      debugPrint('Stack trace: $stackTrace');
-      
       if (mounted) {
-        setState(() {
-          _error = 'Error: ${e.toString()}';
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() => _error = 'Error: ${e.toString()}');
       }
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 

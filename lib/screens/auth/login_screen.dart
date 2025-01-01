@@ -25,20 +25,44 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final supabase = Supabase.instance.client;
-      await supabase.auth.signInWithPassword(
+      
+      debugPrint('Attempting login...');
+      
+      final authResponse = await supabase.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
+      debugPrint('Login response: ${authResponse.user?.email}');
+
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/');
+        if (authResponse.user != null) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          
+          // Navigate to home screen and clear the stack
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        } else {
+          setState(() => _error = 'Login failed: No user returned');
+        }
+      }
+    } on AuthException catch (e) {
+      debugPrint('Auth error during login: $e');
+      if (mounted) {
+        setState(() => _error = e.message);
       }
     } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
+      debugPrint('Error during login: $e');
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() => _error = 'Error: ${e.toString()}');
       }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
