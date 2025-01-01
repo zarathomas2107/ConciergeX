@@ -695,9 +695,14 @@ class AIService {
       print('\n=== Starting Restaurant Search ===');
       print('Initial search term: $searchTerm');
 
+      // Process the search query first
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
       // Get current user's preferences if not provided
       if (userPreferences == null) {
-        final userId = _supabase.auth.currentUser!.id;
         final userProfile = await _supabase
             .from('profiles')
             .select('dietary_requirements, excluded_cuisines, restaurant_preferences')
@@ -711,30 +716,14 @@ class AIService {
         };
         print('Current user preferences: $userPreferences');
       }
+      
+      final processedQuery = await processSearchQuery(searchTerm, userId);
+      print('Processed query: $processedQuery');
 
-      // First find the venue
-      Map<String, dynamic>? venue;
-      if (searchTerm.toLowerCase().contains('near')) {
-        final venueName = searchTerm.toLowerCase().split('near').last.trim();
-        final venues = await getNearbyVenues(51.5074, -0.1278, venueName: venueName);
-        if (venues.isNotEmpty) {
-          venue = venues.first;
-          print('Found venue: ${venue['name']} (${venue['distance']} meters)');
-          print('Using venue coordinates: ${venue['name']} at (${venue['latitude']}, ${venue['longitude']})');
-        }
-      }
-
-      // Get preferences for all mentioned groups
+      // Get user and group preferences
       Map<String, dynamic> groupPreferences = {};
       if (groupIds != null && groupIds.isNotEmpty) {
-        final allGroupPreferences = await Future.wait(
-          groupIds.map((id) => getGroupPreferences(id))
-        );
-        
-        groupPreferences = allGroupPreferences.fold<Map<String, dynamic>>(
-          {},
-          (combined, prefs) => _combineUserAndGroupPreferences(combined, prefs),
-        );
+        groupPreferences = await _getGroupPreferences(groupIds);
       }
 
       // Combine user and group preferences
@@ -743,48 +732,108 @@ class AIService {
         groupPreferences,
       );
 
-      print('Combined preferences: $combinedPreferences'); // Debug output
+      print('Combined preferences: $combinedPreferences');
 
-      // Build search parameters
-      final params = {
-        'p_search_term': searchTerm,
-        'p_dietary_reqs': Map<String, bool>.from(combinedPreferences['dietary_requirements'] ?? {}),
-        'p_excluded_cuisines': List<String>.from(combinedPreferences['excluded_cuisines'] ?? []),
-        'p_preferences': Map<String, bool>.from(combinedPreferences['restaurant_preferences'] ?? {}),
-        if (venue != null) ..._getLocationParams(
-          venue['latitude'] as double,
-          venue['longitude'] as double,
-        ),
-      };
+      // Get venue details from processed query
+      Map<String, dynamic>? venue = processedQuery['venue_details'] as Map<String, dynamic>?;
+      String? cuisineType = processedQuery['cuisine_type'] as String?;
 
-      print('Search params: $params');
+      print('Using venue: ${venue?['name']}');
+      print('Using cuisine type: $cuisineType');
 
-      // Call the search_restaurants function
-      final response = await _supabase.rpc(
-        'search_restaurants',
-        params: params,
-      );
+      // Build the query
+      var query = _supabase
+          .from('restaurants')
+          .select();
 
-      final results = List<Map<String, dynamic>>.from(response);
-      
-      // Sort by distance if we have venue coordinates
+      // Apply cuisine filter if specified
+      if (cuisineType != null && cuisineType.isNotEmpty) {
+        query = query.ilike('CuisineType', '%$cuisineType%');
+      }
+
+      final List<dynamic> response = await query;
+      print('Found ${response.length} restaurants before applying preferences');
+
+      // Convert to the expected format and calculate distances
+      var results = response.map((row) {
+        final restaurantLat = row['Latitude'] as double?;
+        final restaurantLon = row['Longitude'] as double?;
+        double? distance;
+
+        if (venue != null && restaurantLat != null && restaurantLon != null) {
+          distance = calculateDistance(
+            venue['latitude'] as double,
+            venue['longitude'] as double,
+            restaurantLat,
+            restaurantLon
+          );
+        }
+
+        return {
+          'RestaurantID': row['RestaurantID'],
+          'Name': row['Name'],
+          'CuisineType': row['CuisineType'],
+          'Address': row['Address'],
+          'Rating': row['Rating'],
+          'PriceLevel': row['PriceLevel'],
+          'Latitude': restaurantLat,
+          'Longitude': restaurantLon,
+          'Distance': distance,
+        };
+      }).toList();
+
+      // Apply user preferences filtering
+      final excludedCuisines = List<String>.from(combinedPreferences['excluded_cuisines'] ?? []);
+      if (excludedCuisines.isNotEmpty) {
+        print('Excluding cuisines: $excludedCuisines');
+        results = results.where((r) {
+          final cuisine = (r['CuisineType'] as String?) ?? '';
+          return !excludedCuisines.any((excluded) => 
+            cuisine.toLowerCase().contains(excluded.toLowerCase())
+          );
+        }).toList();
+      }
+
+      // Apply dietary requirements if any
+      final dietaryRequirements = Map<String, bool>.from(combinedPreferences['dietary_requirements'] ?? {});
+      if (dietaryRequirements.isNotEmpty) {
+        print('Applying dietary requirements: $dietaryRequirements');
+        if (dietaryRequirements['vegetarian'] == true) {
+          results = results.where((r) {
+            final cuisine = (r['CuisineType'] as String?) ?? '';
+            return !['steakhouse', 'bbq', 'brazilian bbq', 'korean bbq'].any(
+              (meat) => cuisine.toLowerCase().contains(meat)
+            );
+          }).toList();
+        }
+        if (dietaryRequirements['vegan'] == true) {
+          results = results.where((r) {
+            final cuisine = (r['CuisineType'] as String?) ?? '';
+            return !['steakhouse', 'bbq', 'seafood', 'fish'].any(
+              (nonVegan) => cuisine.toLowerCase().contains(nonVegan)
+            );
+          }).toList();
+        }
+        // Add more dietary filters as needed
+      }
+
+      print('Found ${results.length} restaurants after applying preferences');
+
+      // Sort by distance if we have a venue, otherwise by rating
       if (venue != null) {
         results.sort((a, b) => 
-          (a['Distance'] ?? double.infinity)
-          .compareTo(b['Distance'] ?? double.infinity)
+          ((a['Distance'] ?? double.infinity)
+          .compareTo(b['Distance'] ?? double.infinity))
         );
-      }
 
-      // Debug output
-      if (results.isNotEmpty) {
-        results.forEach((r) {
-          if (r['Distance'] != null) {
-            print('Restaurant: ${r['Name']}, Distance: ${r['Distance']}m');
-          }
-        });
+        // Filter to only show restaurants within 2km
+        return results.where((r) => (r['Distance'] ?? double.infinity) <= 2000).toList();
+      } else {
+        results.sort((a, b) => 
+          ((b['Rating'] ?? 0) as num).compareTo((a['Rating'] ?? 0) as num)
+        );
+        return results;
       }
-
-      return results;
     } catch (e) {
       print('Error searching restaurants: $e');
       return [];
@@ -842,5 +891,21 @@ class AIService {
         .toList();
 
     return validGroupIds;
+  }
+
+  Future<Map<String, dynamic>> _getGroupPreferences(List<String> groupIds) async {
+    try {
+      final allGroupPreferences = await Future.wait(
+        groupIds.map((id) => getGroupPreferences(id))
+      );
+      
+      return allGroupPreferences.fold<Map<String, dynamic>>(
+        {},
+        (combined, prefs) => _combineUserAndGroupPreferences(combined, prefs),
+      );
+    } catch (e) {
+      print('Error getting group preferences: $e');
+      return {};
+    }
   }
 } 
