@@ -40,7 +40,7 @@ class HomeScreenState extends State<HomeScreen> {
     _filteredRestaurants = _restaurants;
   }
 
-  Future<void> _filterRestaurants(String query) async {
+  Future<void> filterRestaurants(String query) async {
     if (query.isEmpty) {
       setState(() {
         _filteredRestaurants = _restaurants;
@@ -183,29 +183,6 @@ class HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Search Bar - now at the top with proper styling
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search restaurants...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  prefixIcon: const Icon(Icons.search),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                onSubmitted: _filterRestaurants,
-                textInputAction: TextInputAction.search,
-              ),
-            ),
-            
             // Loading indicator or results
             Expanded(
               child: _isSearching 

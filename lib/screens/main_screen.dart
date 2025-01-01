@@ -17,6 +17,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _isLoading = true;
   String? _error;
   int _currentIndex = 0;
+  final _homeScreenKey = GlobalKey<HomeScreenState>();
 
   @override
   void initState() {
@@ -81,16 +82,59 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
       ),
-      body: _currentIndex == 0
-          ? (_error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
-              : _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : HomeScreen(
-                      restaurants: _restaurants,
-                      onRestaurantsUpdated: _handleRestaurantsUpdated,
-                    ))
-          : const ProfileScreen(),
+      body: Column(
+        children: [
+          Expanded(
+            child: _currentIndex == 0
+                ? (_error != null
+                    ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                    : _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : HomeScreen(
+                            key: _homeScreenKey,
+                            restaurants: _restaurants,
+                            onRestaurantsUpdated: _handleRestaurantsUpdated,
+                          ))
+                : const ProfileScreen(),
+          ),
+          // Search bar above navigation bar
+          if (_currentIndex == 0) // Only show search on home screen
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search restaurants...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                ),
+                onSubmitted: (query) {
+                  if (_currentIndex == 0 && query.isNotEmpty) {
+                    _homeScreenKey.currentState?.filterRestaurants(query);
+                  }
+                },
+              ),
+            ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.black,
         currentIndex: _currentIndex,
