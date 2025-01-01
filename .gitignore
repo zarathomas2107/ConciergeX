@@ -1,44 +1,33 @@
-# Sensitive Python scripts
-scripts/cinema_data_sync.py
-scripts/fetch_soho_restaurants.py
-scripts/fetch_restaurant_details.py
-scripts/soho_theatres.py
-scripts/theatre_restaurant_directions.py
-scripts/menus_download.py
-scripts/run_finetuned_model.py
-scripts/openai_finetuning_check.py
-scripts/populate_london_areas.py
-
-# Sensitive data files
-*.jsonl
-training_data_*.jsonl
-*profiles_rows.sql
-*.log
-
-# Environment files
+# Env files
 .env
-.env.*
-!.env.example
+.env.local
+.env.*.local
 
-# Flutter sensitive configs
-lib/config/env_config.dart
-lib/config/supabase_config.dart
-android/app/src/main/AndroidManifest.xml
-
-# Keep examples
-!lib/config/*.example.dart
-!android/app/src/main/AndroidManifest.example.xml
-
-# Flutter/Dart
+# Flutter/Dart specific
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-build/
-ios/Pods/
+.packages
 .pub-cache/
 .pub/
-
-# IDE
-.idea/
-.vscode/
+build/
+ios/Pods/
 *.iml
+*.lock
+.DS_Store
+
+# Android specific
+android/app/debug
+android/app/profile
+android/app/release
+android/.gradle
+android/local.properties
+android/app/key.properties
+
+# iOS specific
+ios/.symlinks
+ios/Pods/
+ios/Runner.xcworkspace
+ios/Flutter/Debug.xcconfig
+ios/Flutter/Release.xcconfig
+ios/Flutter/Generated.xcconfig

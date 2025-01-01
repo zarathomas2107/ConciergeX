@@ -41,33 +41,25 @@ class GroupMember {
 class Group {
   final String id;
   final String name;
-  final String ownerId;
-  final List<GroupMember> members;
+  final List<String> memberIds;
+  final String createdBy;
   final DateTime createdAt;
 
   Group({
     required this.id,
     required this.name,
-    required this.ownerId,
-    required this.members,
+    required this.memberIds,
+    required this.createdBy,
     required this.createdAt,
   });
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'owner_id': ownerId,
-    'members': members.map((m) => m.toJson()).toList(),
-    'created_at': createdAt.toIso8601String(),
-  };
-
-  factory Group.fromJson(Map<String, dynamic> json) => Group(
-    id: json['id'],
-    name: json['name'],
-    ownerId: json['owner_id'],
-    members: (json['group_members'] as List?)?.map((m) => 
-      GroupMember.fromJson(m as Map<String, dynamic>)
-    ).toList() ?? [],
-    createdAt: DateTime.parse(json['created_at']),
-  );
+  factory Group.fromJson(Map<String, dynamic> json) {
+    return Group(
+      id: json['id'],
+      name: json['name'],
+      memberIds: List<String>.from(json['member_ids'] ?? []),
+      createdBy: json['created_by'],
+      createdAt: DateTime.parse(json['created_at']),
+    );
+  }
 } 

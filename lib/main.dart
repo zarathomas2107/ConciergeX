@@ -6,33 +6,96 @@ import 'screens/profile_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/auth/verification_pending_screen.dart';
+import 'screens/auth/verify_email_screen.dart';
+import 'utils/deep_link_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Load environment variables
   await dotenv.load();
   
-  final supabaseUrl = dotenv.env['SUPABASE_URL'];
-  final supabaseKey = dotenv.env['SUPABASE_KEY'];
+  debugPrint('Initializing Supabase...');
   
-  debugPrint('Initializing Supabase with URL: $supabaseUrl');
-  
-  // Initialize Supabase with minimal configuration
   await Supabase.initialize(
-    url: supabaseUrl!,
-    anonKey: supabaseKey!,
+    url: 'https://snxksagtvimkrngjueal.supabase.co',
+    anonKey: dotenv.env['SUPABASE_KEY']!,
+    debug: true,
   );
 
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _initialized = false;
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      // Check initial session
+      final session = await Supabase.instance.client.auth.currentSession;
+      debugPrint('Initial session: ${session?.user?.email}');
+
+      // Listen for auth state changes
+      Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
+        debugPrint('Auth state changed: ${data.event}');
+        debugPrint('Session: ${data.session?.user?.email}');
+        
+        if (data.event == AuthChangeEvent.signedIn) {
+          debugPrint('User signed in, navigating to home...');
+          
+          // Ensure we're on the UI thread
+          await Future.delayed(Duration.zero);
+          
+          if (!mounted) return;
+          
+          _scaffoldMessengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text('Email verified successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Navigate to home screen
+          _navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
+        }
+      });
+
+      // Handle initial deep link if any
+      final initialUri = Uri.base;
+      if (initialUri.hasFragment) {
+        debugPrint('Initial URI has fragment: ${initialUri.fragment}');
+        final params = Uri.splitQueryString(initialUri.fragment);
+        if (params.containsKey('access_token')) {
+          debugPrint('Found access token in initial URI');
+          // The auth state change listener will handle the navigation
+        }
+      }
+    } catch (e) {
+      debugPrint('Error during initialization: $e');
+    } finally {
+      setState(() => _initialized = true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: _scaffoldMessengerKey,
+      navigatorKey: _navigatorKey,
       title: 'ConciergeX',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
@@ -66,34 +129,49 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/',
+      home: _initialized
+          ? (Supabase.instance.client.auth.currentUser != null
+              ? const MainScreen()
+              : const LoginScreen())
+          : const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
       onGenerateRoute: (settings) {
-        // Check if user is authenticated
-        final isAuthenticated = Supabase.instance.client.auth.currentUser != null;
+        debugPrint('Generating route for: ${settings.name}');
         
-        if (settings.name == '/') {
-          return MaterialPageRoute(
-            builder: (context) => isAuthenticated 
-              ? const MainScreen() 
-              : const LoginScreen(),
-          );
-        }
-        
-        // Other routes
         switch (settings.name) {
-          case '/profile':
-            return MaterialPageRoute(builder: (_) => const ProfileScreen());
+          case '/':
+            return MaterialPageRoute(
+              builder: (_) => const MainScreen(),
+            );
           case '/signup':
-            return MaterialPageRoute(builder: (_) => const SignUpScreen());
+            return MaterialPageRoute(
+              builder: (_) => const SignupScreen(),
+            );
           case '/login':
-            return MaterialPageRoute(builder: (_) => const LoginScreen());
+            return MaterialPageRoute(
+              builder: (_) => const LoginScreen(),
+            );
+          case '/profile':
+            return MaterialPageRoute(
+              builder: (_) => const ProfileScreen(),
+            );
           case '/verification-pending':
             return MaterialPageRoute(
               builder: (_) => const VerificationPendingScreen(),
             );
+          case '/verify-email':
+            return MaterialPageRoute(
+              builder: (_) => const VerifyEmailScreen(),
+            );
           default:
-            return MaterialPageRoute(builder: (_) => const LoginScreen());
+            return MaterialPageRoute(
+              builder: (_) => const LoginScreen(),
+            );
         }
+        return null;
       },
     );
   }

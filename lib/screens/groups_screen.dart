@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/group.dart';
 import 'member_preferences_screen.dart';
+import 'preferences_screen.dart';
+import '../utils/string_extensions.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({Key? key}) : super(key: key);
@@ -12,7 +14,9 @@ class GroupsScreen extends StatefulWidget {
 
 class _GroupsScreenState extends State<GroupsScreen> {
   final _supabase = Supabase.instance.client;
+  final _groupNameController = TextEditingController();
   List<Group> _groups = [];
+  List<User> _selectedUsers = [];
   bool _loading = true;
 
   @override
@@ -32,11 +36,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
         return;
       }
 
-      // First, get the groups
       final groupsResponse = await _supabase
           .from('groups')
           .select()
-          .eq('owner_id', userId);
+          .or('created_by.eq.${userId},member_ids.cs.{${userId}}');
 
       if (groupsResponse == null) {
         setState(() {
@@ -46,34 +49,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
         return;
       }
 
-      // Then, for each group, get its members
-      final groups = await Future.wait(
-        (groupsResponse as List).map((groupData) async {
-          try {
-            final membersResponse = await _supabase
-                .from('group_members')
-                .select()
-                .eq('group_id', groupData['id']);
-
-            return Group(
-              id: groupData['id'],
-              name: groupData['name'],
-              ownerId: groupData['owner_id'],
-              members: (membersResponse as List?)
-                  ?.map((m) => GroupMember.fromJson(m))
-                  ?.toList() ?? [],
-              createdAt: DateTime.parse(groupData['created_at']),
-            );
-          } catch (e) {
-            debugPrint('Error parsing group: $e');
-            return null;
-          }
-        }),
-      );
+      final groups = (groupsResponse as List).map((groupData) {
+        try {
+          return Group(
+            id: groupData['id'],
+            name: groupData['name'],
+            memberIds: List<String>.from(groupData['member_ids'] ?? []),
+            createdBy: groupData['created_by'],
+            createdAt: DateTime.parse(groupData['created_at']),
+          );
+        } catch (e) {
+          debugPrint('Error parsing group: $e');
+          return null;
+        }
+      }).whereType<Group>().toList();
 
       if (mounted) {
         setState(() {
-          _groups = groups.whereType<Group>().toList();
+          _groups = groups;
           _loading = false;
         });
       }
@@ -90,12 +83,19 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _createGroup() async {
+    if (!mounted) return;
+
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AddGroupDialog(),
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: AddGroupDialog(),
+      ),
     );
 
-    if (name == null || name.isEmpty) return;
+    if (name == null || name.isEmpty || !mounted) return;
 
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -103,14 +103,51 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
       await _supabase.from('groups').insert({
         'name': name,
-        'owner_id': userId,
+        'created_by': userId,
+        'member_ids': [userId],
       });
 
-      _loadGroups();
+      if (mounted) {
+        // Schedule reload for next frame
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _loadGroups();
+          }
+        });
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating group: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating group: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showUserSelectionDialog() async {
+    final result = await showDialog<User>(
+      context: context,
+      builder: (context) => AddMemberDialog(),
+    );
+    
+    if (result != null) {
+      setState(() {
+        _selectedUsers.add(result);
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadMemberDetails(List<String> memberIds) async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .inFilter('id', memberIds);
+      
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error loading member details: $e');
+      return [];
     }
   }
 
@@ -144,30 +181,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   ),
                   child: ExpansionTile(
                     title: Text(group.name),
-                    subtitle: Text('${group.members.length} members'),
+                    subtitle: Text('${group.memberIds.length} members'),
                     children: [
-                      // List existing members
-                      ...group.members.map((member) => ListTile(
-                            title: Text(member.name),
-                            subtitle: Text(member.email ?? 'No email'),
-                            trailing: IconButton(
-                              icon: ImageIcon(
-                                const AssetImage('assets/Icons/profile-user.png'),
-                                size: 24,
-                                color: Theme.of(context).iconTheme.color,
-                              ),
-                              onPressed: () => _editMemberPreferences(group, member),
-                            ),
-                          )),
-                      // Add member button
-                      ListTile(
-                        leading: ImageIcon(
-                          const AssetImage('assets/Icons/add.png'),
-                          size: 24,
-                          color: Theme.of(context).iconTheme.color,
-                        ),
-                        title: const Text('Add Member'),
-                        onTap: () => _addMember(group),
+                      FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _loadMemberDetails(group.memberIds),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const CircularProgressIndicator();
+                          }
+                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                            return const Text('No members');
+                          }
+                          return Column(
+                            children: snapshot.data!.map((member) => ListTile(
+                              title: Text(member['name'] ?? 'Unknown'),
+                              subtitle: Text(member['email'] ?? ''),
+                            )).toList(),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -187,26 +218,38 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _addMember(Group group) async {
-    final memberDetails = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) => AddMemberDialog(),
-    );
+    if (!mounted) return;
 
-    if (memberDetails == null) return;
+    final result = await showDialog<User>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (BuildContext context) => WillPopScope(
+        onWillPop: () async => false,  // Prevent back button from closing dialog
+        child: AddMemberDialog(),
+      ),
+    );
+    
+    if (result == null || !mounted) return;
 
     try {
-      await _supabase.from('group_members').insert({
-        'group_id': group.id,
-        'name': memberDetails['name'],
-        'email': memberDetails['email'],
-        'user_id': memberDetails['user_id'],
-        'is_user': memberDetails['is_user'] == 'true',
-        'dietary_requirements': [],
-        'restaurant_preferences': [],
-        'location_preferences': [],
-      });
+      final updatedMemberIds = [...group.memberIds, result.id];
+      
+      await _supabase
+          .from('groups')
+          .update({
+            'member_ids': updatedMemberIds,
+          })
+          .eq('id', group.id);
 
-      _loadGroups();  // Reload to show new member
+      if (mounted) {
+        // Schedule reload for next frame
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _loadGroups();
+          }
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -228,6 +271,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
     _loadGroups();  // Reload to show updated preferences
   }
+
+  @override
+  void dispose() {
+    _groupNameController.dispose();
+    super.dispose();
+  }
 }
 
 class AddGroupDialog extends StatefulWidget {
@@ -236,19 +285,76 @@ class AddGroupDialog extends StatefulWidget {
 }
 
 class _AddGroupDialogState extends State<AddGroupDialog> {
-  final _controller = TextEditingController();
+  final _groupNameController = TextEditingController();
+  final List<User> _selectedUsers = [];
+
+  @override
+  void dispose() {
+    _groupNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _showUserSelectionDialog() async {
+    final result = await showDialog<User>(
+      context: context,
+      builder: (context) => AddMemberDialog(),
+    );
+    
+    if (result != null) {
+      setState(() {
+        _selectedUsers.add(result);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Create New Group'),
-      content: TextField(
-        controller: _controller,
-        decoration: const InputDecoration(
-          labelText: 'Group Name',
-          hintText: 'Enter group name',
+      title: const Text('Create Group'),
+      content: SingleChildScrollView(
+        child: Container(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _groupNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Group Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Members:'),
+              const SizedBox(height: 8),
+              if (_selectedUsers.isNotEmpty)
+                Container(
+                  constraints: BoxConstraints(
+                    maxHeight: 200,
+                  ),
+                  child: Column(
+                    children: _selectedUsers.map((user) => ListTile(
+                      title: Text(user.email),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.remove_circle),
+                        onPressed: () {
+                          setState(() {
+                            _selectedUsers.remove(user);
+                          });
+                        },
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _showUserSelectionDialog,
+                child: const Text('Add Member'),
+              ),
+            ],
+          ),
         ),
-        autofocus: true,
       ),
       actions: [
         TextButton(
@@ -256,17 +362,15 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
           child: const Text('Cancel'),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(context, _controller.text),
+          onPressed: () {
+            if (_groupNameController.text.isNotEmpty) {
+              Navigator.pop(context, _groupNameController.text);
+            }
+          },
           child: const Text('Create'),
         ),
       ],
     );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 }
 
@@ -277,11 +381,137 @@ class AddMemberDialog extends StatefulWidget {
 
 class _AddMemberDialogState extends State<AddMemberDialog> {
   final _supabase = Supabase.instance.client;
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
-  bool _searchingUser = false;
-  List<Map<String, dynamic>> _foundUsers = [];
   bool _isNewMember = true;
+  List<Map<String, dynamic>> _foundUsers = [];
+  bool _searchingUser = false;
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Add Member',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, label: Text('New Member')),
+                  ButtonSegment(value: false, label: Text('Existing User')),
+                ],
+                selected: {_isNewMember},
+                onSelectionChanged: (Set<bool> newSelection) {
+                  setState(() {
+                    _isNewMember = newSelection.first;
+                    _foundUsers.clear();
+                    _firstNameController.clear();
+                    _lastNameController.clear();
+                    _emailController.clear();
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isNewMember) ...[
+                        TextField(
+                          controller: _firstNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'First Name',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _lastNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Last Name',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _emailController,
+                          decoration: const InputDecoration(
+                            labelText: 'Email (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                      ] else ...[
+                        TextField(
+                          controller: _emailController,
+                          decoration: const InputDecoration(
+                            labelText: 'Search by email',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: _searchUsers,
+                        ),
+                        if (_searchingUser)
+                          const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        if (_foundUsers.isNotEmpty)
+                          ...(_foundUsers.map((user) => ListTile(
+                            title: Text('${user['first_name']} ${user['last_name']}'),
+                            subtitle: Text(user['email'] ?? ''),
+                            onTap: () => _handleExistingUser(user),
+                          )).toList()),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_isNewMember)
+                    TextButton(
+                      onPressed: _handleAddMember,
+                      child: const Text('Next'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _searchUsers(String email) async {
     if (email.isEmpty) {
@@ -311,125 +541,72 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Member'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Toggle between existing user and new member
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: true,
-                  label: Text('New Member'),
-                ),
-                ButtonSegment(
-                  value: false,
-                  label: Text('Existing User'),
-                ),
-              ],
-              selected: {_isNewMember},
-              onSelectionChanged: (Set<bool> newSelection) {
-                setState(() {
-                  _isNewMember = newSelection.first;
-                  _foundUsers = [];
-                  _nameController.clear();
-                  _emailController.clear();
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            if (_isNewMember) ...[
-              // New member form
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  hintText: 'Enter member name',
-                ),
-                autofocus: true,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email (optional)',
-                  hintText: 'Enter member email',
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-            ] else ...[
-              // Existing user search
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Search by email',
-                  hintText: 'Enter user email',
-                ),
-                onChanged: _searchUsers,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              if (_searchingUser)
-                const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              if (_foundUsers.isNotEmpty)
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _foundUsers.length,
-                    itemBuilder: (context, index) {
-                      final user = _foundUsers[index];
-                      return ListTile(
-                        title: Text('${user['first_name']} ${user['last_name']}'),
-                        subtitle: Text(user['email'] ?? ''),
-                        onTap: () {
-                          Navigator.pop(context, {
-                            'name': '${user['first_name']} ${user['last_name']}',
-                            'email': user['email'],
-                            'user_id': user['id'],
-                            'is_user': true,
-                          });
-                        },
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ],
+  void _handleAddMember() async {
+    if (_firstNameController.text.isEmpty) return;
+    
+    // Show preferences screen
+    final preferences = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PreferencesScreen(
+          isUserPreferences: false,
+          initialPreferences: {
+            'dietary_requirements': [],
+            'restaurant_preferences': [],
+          },
+          onPreferencesSaved: (prefs) => Navigator.pop(context, prefs),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        if (_isNewMember)
-          TextButton(
-            onPressed: () {
-              if (_nameController.text.isEmpty) return;
-              Navigator.pop(context, {
-                'name': _nameController.text,
-                'email': _emailController.text,
-                'is_user': false,
-              });
-            },
-            child: const Text('Add'),
-          ),
-      ],
     );
+
+    if (preferences == null) return;
+    
+    final result = <String, dynamic>{
+      'name': '${_firstNameController.text} ${_lastNameController.text}'.trim(),
+      'first_name': _firstNameController.text,
+      'last_name': _lastNameController.text,
+      'email': _emailController.text,
+      'is_user': false,
+      'dietary_requirements': preferences['dietary_requirements'] ?? [],
+      'restaurant_preferences': preferences['restaurant_preferences'] ?? [],
+    };
+    
+    Navigator.pop(context, result);
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    super.dispose();
+  void _handleExistingUser(Map<String, dynamic> userData) {
+    if (!mounted) return;
+    
+    final user = User(
+      id: userData['id'],
+      email: userData['email'] ?? '',
+      firstName: userData['first_name'],
+      lastName: userData['last_name'],
+    );
+    
+    // Schedule navigation for the next frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(user);
+      }
+    });
   }
+}
+
+class User {
+  final String id;
+  final String email;
+  final String? firstName;
+  final String? lastName;
+
+  User({
+    required this.id,
+    required this.email,
+    this.firstName,
+    this.lastName,
+  });
+
+  String get name => [firstName, lastName]
+      .where((s) => s != null && s.isNotEmpty)
+      .join(' ');
 } 

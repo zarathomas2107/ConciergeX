@@ -3,67 +3,77 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 
 class Restaurant {
-  final String id;
+  final String? restaurantId;
   final String name;
-  final String cuisineType;
+  final String? cuisineType;
   final String address;
   final double rating;
-  final int priceLevel;
-  final String businessStatus;
   final double latitude;
   final double longitude;
-  final String? website;
-  final String city;
-  final String country;
+  final int? priceLevel;
   final double? distance;
 
   String get photoUrl {
     try {
-      // Get the public URL for the restaurant's image from Supabase storage
-      return Supabase.instance.client.storage
-          .from('Photos/London_Restaurant_Photos')  // Updated bucket path
-          .getPublicUrl('${id}.jpg');
+      if (restaurantId == null) {
+        return 'https://picsum.photos/400/300';
+      }
+      print('Getting photo for restaurant: $restaurantId');
+      
+      final url = Supabase.instance.client.storage
+          .from('Photos/London_Restaurant_Photos')
+          .getPublicUrl('$restaurantId.jpg');
+      
+      print('Generated photo URL: $url');
+      return url;
     } catch (e) {
-      print('Error getting photo URL for restaurant $id: $e');
-      return 'https://via.placeholder.com/400x300?text=No+Image';
+      print('Error getting photo URL for restaurant $restaurantId: $e');
+      return 'https://picsum.photos/400/300';
     }
   }
 
   Restaurant({
-    required this.id,
+    this.restaurantId,
     required this.name,
-    required this.cuisineType,
+    this.cuisineType,
     required this.address,
     required this.rating,
-    required this.priceLevel,
-    required this.businessStatus,
     required this.latitude,
     required this.longitude,
-    this.website,
-    required this.city,
-    required this.country,
+    this.priceLevel,
     this.distance,
   });
 
-  factory Restaurant.fromSupabase(Map<String, dynamic> json) {
+  factory Restaurant.fromJson(Map<String, dynamic> json) {
     return Restaurant(
-      id: json['RestaurantID']?.toString() ?? json['id']?.toString() ?? '',
-      name: json['Name']?.toString() ?? '',
-      cuisineType: json['CuisineType']?.toString() ?? '',
-      address: json['Address']?.toString() ?? '',
-      rating: (json['Rating'] ?? 0.0).toDouble(),
-      priceLevel: (json['PriceLevel'] ?? 0).toInt(),
-      businessStatus: json['BusinessStatus']?.toString() ?? 'UNKNOWN',
-      latitude: (json['Latitude'] ?? 0.0).toDouble(),
-      longitude: (json['Longitude'] ?? 0.0).toDouble(),
-      website: json['website']?.toString(),
-      city: json['City']?.toString() ?? '',
-      country: json['Country']?.toString() ?? '',
-      distance: json['distance']?.toDouble(),
+      restaurantId: json['RestaurantID'] as String?,
+      name: json['Name'] as String,
+      cuisineType: json['CuisineType'] as String?,
+      address: json['Address'] as String,
+      rating: (json['Rating'] as num).toDouble(),
+      latitude: (json['Latitude'] as num).toDouble(),
+      longitude: (json['Longitude'] as num).toDouble(),
+      priceLevel: json['PriceLevel'] != null ? (json['PriceLevel'] as num).toInt() : null,
+      distance: json['distance'] != null ? (json['distance'] as num).toDouble() : null,
     );
   }
 
+  factory Restaurant.fromSupabase(Map<String, dynamic> json) => Restaurant.fromJson(json);
+
+  Map<String, dynamic> toJson() => {
+    'RestaurantID': restaurantId,
+    'Name': name,
+    'CuisineType': cuisineType,
+    'Address': address,
+    'Rating': rating,
+    'Latitude': latitude,
+    'Longitude': longitude,
+    'PriceLevel': priceLevel,
+    'distance': distance,
+  };
+
   String getPriceLevel() {
-    return '£' * (priceLevel.clamp(0, 4));
+    if (priceLevel == null) return '£';
+    return '£' * priceLevel!.clamp(1, 4);
   }
 }

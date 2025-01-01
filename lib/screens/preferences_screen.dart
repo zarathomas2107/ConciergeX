@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/string_extensions.dart';
+import '../widgets/multi_select_location_dialog.dart';
+import '../constants/cuisine_types.dart';
 
 class PreferencesScreen extends StatefulWidget {
-  const PreferencesScreen({Key? key}) : super(key: key);
+  final bool isUserPreferences;
+  final Map<String, dynamic> initialPreferences;
+  final Function(Map<String, dynamic>) onPreferencesSaved;
+
+  const PreferencesScreen({
+    Key? key,
+    required this.isUserPreferences,
+    required this.initialPreferences,
+    required this.onPreferencesSaved,
+  }) : super(key: key);
 
   @override
   _PreferencesScreenState createState() => _PreferencesScreenState();
@@ -10,138 +22,157 @@ class PreferencesScreen extends StatefulWidget {
 
 class _PreferencesScreenState extends State<PreferencesScreen> {
   final _supabase = Supabase.instance.client;
-  Map<String, bool> _dietaryRequirements = {
-    'vegetarian': false,
-    'vegan': false,
-    'pescatarian': false,
-    'halal': false,
-    'kosher': false,
-    'gluten_free': false,
-    'dairy_free': false,
-    'nut_free': false,
-    'shellfish_allergy': false,
-  };
-  List<String> _otherRequirements = [];
-  Map<String, bool> _restaurantPreferences = {
-    'Dog_Friendly': false,
-    'Business_Meals': false,
-    'Birthdays': false,
-    'Date_Nights': false,
-    'Pre_Theatre': false,
-    'Cheap_Eat': false,
-    'Fine_Dining': false,
-    'Family_Friendly': false,
-    'Solo': false,
-    'Bar': false,
-    'Casual_Dinner': false,
-    'Brunch': false,
-    'Breakfast': false,
-    'Lunch': false,
-    'Dinner': false,
-  };
-  List<String> _otherRestaurantPreferences = [];
-  List<String> _locationPreferences = [];
-  bool _loading = true;
+  bool _loading = false;
+  List<String> _availableCuisines = [];
+  Map<String, bool> _dietaryRequirements = {};
+  Map<String, bool> _restaurantPreferences = {};
+  final List<String> _excludedCuisines = [];
+
+  // Add expansion state
+  bool _isDietaryExpanded = true;
+  bool _isRestaurantExpanded = true;
+  bool _isCuisineExpanded = true;
 
   @override
   void initState() {
     super.initState();
-    _loadPreferences();
+    _loadCuisineTypes();
+    _loadDietaryRequirements();
+    _loadRestaurantPreferences();
+    _excludedCuisines.addAll(
+      List<String>.from(widget.initialPreferences['excluded_cuisines'] ?? [])
+    );
   }
 
-  Future<void> _loadPreferences() async {
+  Future<void> _loadRestaurantPreferences() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Load profile data (location preferences)
-      final profileData = await _supabase
-          .from('profiles')
-          .select('location_preferences')
-          .eq('id', userId)
-          .single();
+      // Get all feature columns from restaurants_features table
+      final features = await _supabase
+          .rpc('get_distinct_restaurant_features');
 
-      // Load dietary requirements
-      final dietaryData = await _supabase
-          .from('user_dietary_requirements')
-          .select()
-          .eq('profile_id', userId)
-          .maybeSingle();
+      print('Features from DB: $features'); // Debug log
 
-      if (dietaryData != null) {
-        setState(() {
-          _dietaryRequirements = Map.fromEntries(
-            _dietaryRequirements.keys.map((key) => 
-              MapEntry(key, dietaryData[key] ?? false)
-            ),
-          );
-          _otherRequirements = List<String>.from(dietaryData['other_requirements'] ?? []);
-        });
-      }
-
-      // Load restaurant preferences
-      final restaurantData = await _supabase
+      // Get user's preferences
+      final userPrefs = await _supabase
           .from('user_restaurant_preferences')
           .select()
-          .eq('profile_id', userId)
+          .eq('user_id', userId)
           .maybeSingle();
 
-      if (restaurantData != null) {
-        setState(() {
-          _restaurantPreferences = Map.fromEntries(
-            _restaurantPreferences.keys.map((key) => 
-              MapEntry(key, restaurantData[key] ?? false)
-            ),
-          );
-          _otherRestaurantPreferences = List<String>.from(restaurantData['other_preferences'] ?? []);
-        });
-      }
-
       setState(() {
-        _locationPreferences = List<String>.from(profileData['location_preferences'] ?? []);
-        _loading = false;
+        // Initialize preferences with features from database
+        _restaurantPreferences = Map.fromEntries(
+          (features as List).map<MapEntry<String, bool>>((feature) => 
+            MapEntry(feature['feature_name'] as String, feature['feature_value'] as bool)
+          )
+        );
+
+        // Update with user's selected preferences if they exist
+        if (userPrefs != null) {
+          for (var entry in (userPrefs as Map<String, dynamic>).entries) {
+            if (entry.key != 'user_id' && 
+                entry.key != 'created_at' && 
+                entry.key != 'updated_at' &&
+                _restaurantPreferences.containsKey(entry.key)) {
+              _restaurantPreferences[entry.key] = entry.value as bool;
+            }
+          }
+        }
       });
+
+      print('Loaded ${_restaurantPreferences.length} restaurant preferences from database');
+      print('Preferences: $_restaurantPreferences'); // Debug log
     } catch (e) {
-      debugPrint('Error loading preferences: $e');
-      setState(() => _loading = false);
+      print('Error loading restaurant preferences: $e');
+      print('Error details: ${e.toString()}');
     }
   }
 
-  Future<void> _savePreferences() async {
+  Future<void> _saveRestaurantPreferences() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Save dietary requirements
-      await _supabase.from('user_dietary_requirements').upsert({
-        'profile_id': userId,
-        ..._dietaryRequirements,
-        'other_requirements': _otherRequirements,
-      });
-
-      // Save restaurant preferences
-      await _supabase.from('user_restaurant_preferences').upsert({
-        'profile_id': userId,
-        ..._restaurantPreferences,
-        'other_preferences': _otherRestaurantPreferences,
-      });
-
-      // Save location preferences
-      await _supabase.from('profiles').update({
-        'location_preferences': _locationPreferences,
-      }).eq('id', userId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Preferences saved')),
-        );
-      }
+      await _supabase
+          .from('user_restaurant_preferences')
+          .upsert({
+            'user_id': userId,
+            ..._restaurantPreferences,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving preferences: $e')),
-        );
-      }
+      print('Error saving restaurant preferences: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving restaurant preferences: $e')),
+      );
+    }
+  }
+
+  Future<void> _loadDietaryRequirements() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Get the user's current dietary requirements
+      final response = await _supabase
+          .from('user_dietary_requirements')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      setState(() {
+        _dietaryRequirements = {
+          'no_beef': response?['no_beef'] ?? false,
+          'no_pork': response?['no_pork'] ?? false,
+          'vegetarian': response?['vegetarian'] ?? false,
+          'vegan': response?['vegan'] ?? false,
+          'halal': response?['halal'] ?? false,
+          'kosher': response?['kosher'] ?? false,
+          'gluten_free': response?['gluten_free'] ?? false,
+          'dairy_free': response?['dairy_free'] ?? false,
+          'nut_allergy': response?['nut_allergy'] ?? false,
+          'shellfish_allergy': response?['shellfish_allergy'] ?? false,
+        };
+      });
+    } catch (e) {
+      print('Error loading dietary requirements: $e');
+    }
+  }
+
+  Future<void> _saveDietaryRequirements() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await _supabase
+          .from('user_dietary_requirements')
+          .upsert({
+            'user_id': userId,
+            ..._dietaryRequirements,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+    } catch (e) {
+      print('Error saving dietary requirements: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving dietary requirements: $e')),
+      );
+    }
+  }
+
+  Future<void> _loadCuisineTypes() async {
+    setState(() => _loading = true);
+    try {
+      final cuisines = await CuisineTypes.all;
+      setState(() {
+        _availableCuisines = cuisines;
+        _loading = false;
+      });
+    } catch (e) {
+      print('Error loading cuisine types: $e');
+      setState(() => _loading = false);
     }
   }
 
@@ -149,246 +180,123 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: ImageIcon(
-              const AssetImage('assets/Icons/profile-user.png'),
-              color: Colors.white,
-            ),
-          ),
-        ),
-        title: const Text('My Preferences'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _savePreferences,
-          ),
-        ],
+        title: Text(widget.isUserPreferences ? 'Your Preferences' : 'Member Preferences'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              children: [
-                _buildDietaryRequirements(),
-                const Divider(height: 32),
-                _buildOtherRequirements(),
-                const Divider(height: 32),
-                _buildRestaurantPreferences(),
-                const Divider(height: 32),
-                _buildOtherRestaurantPreferences(),
-                const Divider(height: 32),
-                _buildSection(
-                  title: 'Location Preferences',
-                  items: _locationPreferences,
-                  onAdd: _addLocationPreference,
-                  onRemove: (item) {
-                    setState(() => _locationPreferences.remove(item));
-                  },
-                ),
-              ],
-            ),
-    );
-  }
+              child: Column(
+                children: [
+                  // Dietary Requirements Section
+                  ExpansionTile(
+                    initiallyExpanded: _isDietaryExpanded,
+                    title: const Text(
+                      'Dietary Requirements',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    onExpansionChanged: (expanded) {
+                      setState(() => _isDietaryExpanded = expanded);
+                    },
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _dietaryRequirements.entries.map((entry) {
+                          return FilterChip(
+                            label: Text(entry.key.replaceAll('_', ' ').toTitleCase()),
+                            selected: entry.value,
+                            onSelected: (selected) {
+                              setState(() {
+                                _dietaryRequirements[entry.key] = selected;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
 
-  Widget _buildDietaryRequirements() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Dietary Requirements',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _dietaryRequirements.entries.map((entry) {
-            return FilterChip(
-              label: Text(entry.key.replaceAll('_', ' ').toTitleCase()),
-              selected: entry.value,
-              onSelected: (selected) {
-                setState(() {
-                  _dietaryRequirements[entry.key] = selected;
-                });
-              },
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
+                  // Restaurant Preferences Section
+                  ExpansionTile(
+                    initiallyExpanded: _isRestaurantExpanded,
+                    title: const Text(
+                      'Restaurant Preferences',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    onExpansionChanged: (expanded) {
+                      setState(() => _isRestaurantExpanded = expanded);
+                    },
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _restaurantPreferences.entries.map((entry) {
+                          return FilterChip(
+                            label: Text(entry.key.replaceAll('_', ' ').toTitleCase()),
+                            selected: entry.value,
+                            onSelected: (selected) {
+                              setState(() {
+                                _restaurantPreferences[entry.key] = selected;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
 
-  Widget _buildOtherRequirements() {
-    return _buildSection(
-      title: 'Other Dietary Requirements',
-      items: _otherRequirements,
-      onAdd: _addOtherRequirement,
-      onRemove: (item) {
-        setState(() => _otherRequirements.remove(item));
-      },
-    );
-  }
-
-  Widget _buildRestaurantPreferences() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Restaurant Preferences',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _restaurantPreferences.entries.map((entry) {
-            return FilterChip(
-              label: Text(entry.key.replaceAll('_', ' ').toTitleCase()),
-              selected: entry.value,
-              onSelected: (selected) {
-                setState(() {
-                  _restaurantPreferences[entry.key] = selected;
-                });
-              },
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOtherRestaurantPreferences() {
-    return _buildSection(
-      title: 'Other Restaurant Preferences',
-      items: _otherRestaurantPreferences,
-      onAdd: _addOtherRestaurantPreference,
-      onRemove: (item) {
-        setState(() => _otherRestaurantPreferences.remove(item));
-      },
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required List<String> items,
-    required VoidCallback onAdd,
-    required Function(String) onRemove,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+                  // Excluded Cuisines Section
+                  ExpansionTile(
+                    initiallyExpanded: _isCuisineExpanded,
+                    title: const Text(
+                      'Excluded Cuisines',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    onExpansionChanged: (expanded) {
+                      setState(() => _isCuisineExpanded = expanded);
+                    },
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _availableCuisines.map((cuisine) {
+                          final isSelected = _excludedCuisines.contains(cuisine);
+                          return FilterChip(
+                            label: Text(cuisine),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _excludedCuisines.add(cuisine);
+                                } else {
+                                  _excludedCuisines.remove(cuisine);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            IconButton(
-              icon: ImageIcon(
-                const AssetImage('assets/Icons/add.png'),
-                size: 24,
-                color: Colors.white,
-              ),
-              onPressed: onAdd,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: items.map((item) {
-            return Chip(
-              label: Text(item),
-              onDeleted: () => onRemove(item),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _addOtherRequirement() async {
-    final requirement = await _showAddDialog(
-      title: 'Add Other Requirement',
-      hint: 'e.g., No onions, Low FODMAP',
-    );
-    if (requirement != null) {
-      setState(() => _otherRequirements.add(requirement));
-    }
-  }
-
-  Future<void> _addOtherRestaurantPreference() async {
-    final preference = await _showAddDialog(
-      title: 'Add Other Restaurant Preference',
-      hint: 'e.g., Wine Bar, Cocktail Bar',
-    );
-    if (preference != null) {
-      setState(() => _otherRestaurantPreferences.add(preference));
-    }
-  }
-
-  Future<void> _addLocationPreference() async {
-    final preference = await _showAddDialog(
-      title: 'Add Location Preference',
-      hint: 'e.g., Covent Garden, Soho',
-    );
-    if (preference != null) {
-      setState(() => _locationPreferences.add(preference));
-    }
-  }
-
-  Future<String?> _showAddDialog({
-    required String title,
-    required String hint,
-  }) {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: hint,
+      bottomNavigationBar: BottomAppBar(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: ElevatedButton(
+            onPressed: () async {
+              await _saveDietaryRequirements();
+              await _saveRestaurantPreferences();
+              widget.onPreferencesSaved({
+                'excluded_cuisines': _excludedCuisines,
+              });
+            },
+            child: const Text('Save Preferences'),
           ),
-          autofocus: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
   }
 }
-
-extension StringExtension on String {
-  String toTitleCase() {
-    return split(' ')
-        .map((word) => word.isEmpty 
-            ? '' 
-            : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
-        .join(' ');
-  }
-} 

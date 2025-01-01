@@ -33,117 +33,101 @@ class DateButton extends StatelessWidget {
 
 class RestaurantCard extends StatelessWidget {
   final Restaurant restaurant;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const RestaurantCard({
     Key? key,
     required this.restaurant,
-    required this.onTap,
+    this.onTap,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    print('Building card for ${restaurant.name} with distance: ${restaurant.distance}');
     return Card(
-      margin: const EdgeInsets.all(8.0),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: InkWell(
         onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Restaurant image
+            // Image section
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(4.0)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
               child: Image.network(
                 restaurant.photoUrl,
                 height: 200,
                 width: double.infinity,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  print('Error loading image for ${restaurant.name}: $error');
                   return Container(
                     height: 200,
-                    color: Colors.grey[200],
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.restaurant, size: 50, color: Colors.grey[400]),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No Image Available',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[200],
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded / 
-                              loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: Icon(Icons.restaurant, size: 50),
                     ),
                   );
                 },
               ),
             ),
+            
+            // Content section
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Restaurant name and rating
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         child: Text(
                           restaurant.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Row(
-                        children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 20),
-                          Text(
-                            restaurant.rating.toStringAsFixed(1),
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                        ],
+                      if (restaurant.rating != null)
+                        Row(
+                          children: [
+                            const Icon(Icons.star, color: Colors.amber, size: 20),
+                            const SizedBox(width: 4),
+                            Text(
+                              restaurant.rating!.toStringAsFixed(1),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Cuisine type and price level
+                  Row(
+                    children: [
+                      if (restaurant.cuisineType != null) ...[
+                        Text(
+                          restaurant.cuisineType!,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('•'),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        restaurant.getPriceLevel(),
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    restaurant.cuisineType,
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    restaurant.getPriceLevel(),
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  if (restaurant.distance != null) ...[
-                    const SizedBox(height: 4),
+                  
+                  // Distance if available
+                  if (restaurant.distance != null)
                     Text(
-                      restaurant.distance! < 1000
-                          ? '${restaurant.distance!.round()}m away'
-                          : '${(restaurant.distance! / 1000).toStringAsFixed(1)}km away',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
+                      '${(restaurant.distance! / 1000).toStringAsFixed(1)}km away',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ],
                 ],
               ),
             ),
