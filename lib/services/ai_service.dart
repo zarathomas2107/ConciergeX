@@ -751,6 +751,22 @@ class AIService {
         query = query.ilike('CuisineType', '%$cuisineType%');
       }
 
+      // If we have venue coordinates, use the find_nearby_restaurants function
+      if (venue != null && venue['latitude'] != null && venue['longitude'] != null) {
+        final response = await _supabase.rpc(
+          'find_nearby_restaurants',
+          params: {
+            'ref_latitude': venue['latitude'],
+            'ref_longitude': venue['longitude'],
+            'search_cuisine_type': cuisineType ?? '',
+            'max_distance': 2000 // 2km radius
+          }
+        );
+        print('Found ${response.length} nearby restaurants');
+        return List<Map<String, dynamic>>.from(response);
+      }
+
+      // Fallback to regular search if no venue coordinates
       final List<dynamic> response = await query;
       print('Found ${response.length} restaurants before applying preferences');
 

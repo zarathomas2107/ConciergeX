@@ -62,15 +62,21 @@ class _MyAppState extends State<MyApp> {
           
           if (!mounted) return;
           
-          _scaffoldMessengerKey.currentState?.showSnackBar(
-            const SnackBar(
-              content: Text('Email verified successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          // Only show verification message if coming from email verification
+          if (data.session?.user?.emailConfirmedAt != null) {
+            _scaffoldMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Email verified successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
 
-          // Navigate to home screen
-          _navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
+          // Force navigation to MainScreen
+          _navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const MainScreen()),
+            (route) => false,
+          );
         }
       });
 
@@ -141,10 +147,15 @@ class _MyAppState extends State<MyApp> {
       onGenerateRoute: (settings) {
         debugPrint('Generating route for: ${settings.name}');
         
+        // If user is authenticated, force navigation to MainScreen for root route
+        if (settings.name == '/' && Supabase.instance.client.auth.currentUser != null) {
+          return MaterialPageRoute(builder: (_) => const MainScreen());
+        }
+        
         switch (settings.name) {
           case '/':
             return MaterialPageRoute(
-              builder: (_) => const MainScreen(),
+              builder: (_) => const LoginScreen(),
             );
           case '/signup':
             return MaterialPageRoute(

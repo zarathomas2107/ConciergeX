@@ -136,7 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await _supabase.auth.signOut();
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/');
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

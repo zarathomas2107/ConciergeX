@@ -44,9 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          
-          // Navigate to home screen and clear the stack
-          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          // Navigation will be handled by the auth state listener
         } else {
           setState(() => _error = 'Login failed: No user returned');
         }
