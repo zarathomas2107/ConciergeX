@@ -175,11 +175,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
               children: [
                 _buildDietaryRequirements(),
                 const Divider(height: 32),
-                _buildOtherRequirements(),
-                const Divider(height: 32),
                 _buildRestaurantPreferences(),
-                const Divider(height: 32),
-                _buildOtherRestaurantPreferences(),
                 const Divider(height: 32),
                 _buildSection(
                   title: 'Location Preferences',
@@ -221,18 +217,49 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
             );
           }).toList(),
         ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Other Requirements',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  IconButton(
+                    icon: ImageIcon(
+                      const AssetImage('assets/Icons/add.png'),
+                      size: 24,
+                      color: Colors.white,
+                    ),
+                    onPressed: _addOtherRequirement,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _otherRequirements.map((item) {
+                  return Chip(
+                    label: Text(item),
+                    onDeleted: () {
+                      setState(() => _otherRequirements.remove(item));
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
       ],
-    );
-  }
-
-  Widget _buildOtherRequirements() {
-    return _buildSection(
-      title: 'Other Dietary Requirements',
-      items: _otherRequirements,
-      onAdd: _addOtherRequirement,
-      onRemove: (item) {
-        setState(() => _otherRequirements.remove(item));
-      },
     );
   }
 
@@ -263,18 +290,49 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
             );
           }).toList(),
         ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Other Preferences',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  IconButton(
+                    icon: ImageIcon(
+                      const AssetImage('assets/Icons/add.png'),
+                      size: 24,
+                      color: Colors.white,
+                    ),
+                    onPressed: _addOtherRestaurantPreference,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _otherRestaurantPreferences.map((item) {
+                  return Chip(
+                    label: Text(item),
+                    onDeleted: () {
+                      setState(() => _otherRestaurantPreferences.remove(item));
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
       ],
-    );
-  }
-
-  Widget _buildOtherRestaurantPreferences() {
-    return _buildSection(
-      title: 'Other Restaurant Preferences',
-      items: _otherRestaurantPreferences,
-      onAdd: _addOtherRestaurantPreference,
-      onRemove: (item) {
-        setState(() => _otherRestaurantPreferences.remove(item));
-      },
     );
   }
 
@@ -391,4 +449,4 @@ extension StringExtension on String {
             : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
         .join(' ');
   }
-} 
+}

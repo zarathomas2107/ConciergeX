@@ -16,13 +16,13 @@ dependencies:
   mapbox_maps_flutter: ^2.5.0  # Update to latest version
   google_maps_flutter: ^2.5.3  # Latest stable version
   google_maps_utils: ^1.5.1
-  app_links: ^3.4.1  # Downgrade to a more stable version
+  app_links: ^3.5.1
 
 flutter:
+  uses-material-design: true
   assets:
-    - .env
-    - assets/icon/
     - assets/Icons/
+    - .env
 
 version: 1.0.0+1
 

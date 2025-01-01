@@ -84,7 +84,7 @@ class MyApp extends StatelessWidget {
           case '/profile':
             return MaterialPageRoute(builder: (_) => const ProfileScreen());
           case '/signup':
-            return MaterialPageRoute(builder: (_) => const SignUpScreen());
+            return MaterialPageRoute(builder: (_) => const SignupScreen());
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
           case '/verification-pending':
