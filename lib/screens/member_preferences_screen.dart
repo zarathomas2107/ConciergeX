@@ -60,9 +60,9 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
   List<String> _otherRestaurantPreferences = [];
   List<String> _locationPreferences = [];
   bool _loading = true;
-  bool _isDietaryExpanded = true;
-  bool _isRestaurantExpanded = true;
-  bool _isLocationExpanded = true;
+  bool _isDietaryExpanded = false;
+  bool _isRestaurantExpanded = false;
+  bool _isLocationExpanded = false;
 
   @override
   void initState() {

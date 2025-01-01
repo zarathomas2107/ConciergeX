@@ -29,9 +29,9 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   final List<String> _excludedCuisines = [];
 
   // Add expansion state
-  bool _isDietaryExpanded = true;
-  bool _isRestaurantExpanded = true;
-  bool _isCuisineExpanded = true;
+  bool _isDietaryExpanded = false;
+  bool _isRestaurantExpanded = false;
+  bool _isCuisineExpanded = false;
 
   @override
   void initState() {
