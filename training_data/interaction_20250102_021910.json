@@ -1,0 +1,8 @@
+{
+  "query": "Find affordable Italian restaurants near Apollo Theatre that are family-friendly",
+  "steps": [],
+  "final_result": {
+    "output": "{\n    \"success\": true,\n    \"summary\": \"Searching for affordable, family-friendly Italian restaurants near Apollo Theatre\",\n    \"query\": \"SELECT * FROM restaurants WHERE ST_DWithin(ST_Point(longitude, latitude), ST_Point($1, $2), $3) AND CuisineType = 'Italian' AND PriceRange = 'affordable' AND Features @> ARRAY['family-friendly']::varchar[] ORDER BY Rating DESC LIMIT 20\",\n    \"parameters\": {\n        \"venue_coordinates\": [-0.1332442, 51.5114967],\n        \"radius\": 1000\n    }\n}",
+    "intermediate_steps": [
+      [
+        

@@ -1,0 +1,8 @@
+{
+  "query": "Find affordable Italian restaurants near Apollo Theatre that are family-friendly",
+  "steps": [],
+  "final_result": {
+    "output": "Agent stopped due to iteration limit or time limit.",
+    "intermediate_steps": [
+      [
+        

@@ -113,7 +113,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               child: TextField(
                 decoration: InputDecoration(
-                  hintText: 'Search restaurants...',
+                  hintText: 'Search restaurants (e.g., "Italian near Apollo Theatre")...',
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(25),
@@ -126,9 +126,20 @@ class _MainScreenState extends State<MainScreen> {
                     vertical: 10,
                   ),
                 ),
-                onSubmitted: (query) {
+                onSubmitted: (query) async {
                   if (_currentIndex == 0 && query.isNotEmpty) {
-                    _homeScreenKey.currentState?.filterRestaurants(query);
+                    try {
+                      await _homeScreenKey.currentState?.filterRestaurants(query);
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Search failed: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                   }
                 },
               ),

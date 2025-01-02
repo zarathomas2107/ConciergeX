@@ -1,0 +1,8 @@
+{
+  "query": "Looking for vegetarian Asian food near Apollo Theatre for @colleagues, budget-friendly (user_id: test_user_123)",
+  "steps": [],
+  "final_result": null,
+  "timestamp": "2025-01-01T22:37:25.961103",
+  "success": false,
+  "error": "'Input to PromptTemplate is missing variables {\\'\\\\n                \"venue\"\\'}.  Expected: [\\'\\\\n                \"venue\"\\', \\'agent_scratchpad\\', \\'input\\'] Received: [\\'input\\', \\'intermediate_steps\\', \\'agent_scratchpad\\']\\nNote: if you intended {\\n                \"venue\"} to be part of the string and not a variable, please escape it with double curly braces like: \\'{{\\n                \"venue\"}}\\'.\\nFor troubleshooting, visit: https://python.langchain.com/docs/troubleshooting/errors/INVALID_PROMPT_INPUT '"
+}

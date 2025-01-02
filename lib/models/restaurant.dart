@@ -32,6 +32,15 @@ class Restaurant {
     }
   }
 
+  String get formattedDistance {
+    if (distance == null) return 'Distance unknown';
+    if (distance! < 1000) {
+      return '${distance!.round()}m';
+    } else {
+      return '${(distance! / 1000).toStringAsFixed(1)}km';
+    }
+  }
+
   Restaurant({
     this.restaurantId,
     required this.name,
@@ -45,16 +54,24 @@ class Restaurant {
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
+    double? parseDistance() {
+      if (json['Distance'] != null) return (json['Distance'] as num).toDouble();
+      if (json['distance'] != null) return (json['distance'] as num).toDouble();
+      if (json['distance_meters'] != null) return (json['distance_meters'] as num).toDouble();
+      return null;
+    }
+
     return Restaurant(
-      restaurantId: json['RestaurantID'] as String?,
-      name: json['Name'] as String,
-      cuisineType: json['CuisineType'] as String?,
-      address: json['Address'] as String,
-      rating: (json['Rating'] as num).toDouble(),
-      latitude: (json['Latitude'] as num).toDouble(),
-      longitude: (json['Longitude'] as num).toDouble(),
-      priceLevel: json['PriceLevel'] != null ? (json['PriceLevel'] as num).toInt() : null,
-      distance: json['distance'] != null ? (json['distance'] as num).toDouble() : null,
+      restaurantId: json['RestaurantID'] as String? ?? json['restaurant_id'] as String?,
+      name: json['Name'] as String? ?? json['name'] as String,
+      cuisineType: json['CuisineType'] as String? ?? json['cuisine_type'] as String?,
+      address: json['Address'] as String? ?? json['address'] as String,
+      rating: ((json['Rating'] ?? json['rating']) as num).toDouble(),
+      latitude: ((json['Latitude'] ?? json['latitude']) as num).toDouble(),
+      longitude: ((json['Longitude'] ?? json['longitude']) as num).toDouble(),
+      priceLevel: json['PriceLevel'] != null ? (json['PriceLevel'] as num).toInt() : 
+                 json['price_level'] != null ? (json['price_level'] as num).toInt() : null,
+      distance: parseDistance(),
     );
   }
 

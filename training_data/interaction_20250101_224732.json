@@ -1,0 +1,8 @@
+{
+  "query": "Find Italian restaurants near Apollo Theatre (user_id: test_user_123)",
+  "steps": [],
+  "final_result": {
+    "output": "Agent stopped due to iteration limit or time limit.",
+    "intermediate_steps": [
+      [
+        

@@ -1,0 +1,8 @@
+{
+  "query": "Italian restaurants near the Apollo theatre",
+  "steps": [],
+  "final_result": {
+    "output": "Agent stopped due to iteration limit or time limit.",
+    "intermediate_steps": [
+      [
+        

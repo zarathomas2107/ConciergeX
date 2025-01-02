@@ -85,7 +85,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Future<void> _createGroup() async {
     if (!mounted) return;
 
-    final name = await showDialog<String>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       useRootNavigator: true,
       barrierDismissible: false,
@@ -95,16 +95,23 @@ class _GroupsScreenState extends State<GroupsScreen> {
       ),
     );
 
-    if (name == null || name.isEmpty || !mounted) return;
+    if (result == null || !mounted) return;
 
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
+      // Get the group name and selected users from the dialog result
+      final name = result['name'] as String;
+      final selectedUsers = result['selectedUsers'] as List<User>;
+
+      // Create member_ids array with creator and selected users
+      final memberIds = [userId, ...selectedUsers.map((u) => u.id)];
+
       await _supabase.from('groups').insert({
         'name': name,
         'created_by': userId,
-        'member_ids': [userId],
+        'member_ids': memberIds,
       });
 
       if (mounted) {
@@ -364,7 +371,10 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
         TextButton(
           onPressed: () {
             if (_groupNameController.text.isNotEmpty) {
-              Navigator.pop(context, _groupNameController.text);
+              Navigator.pop(context, {
+                'name': _groupNameController.text,
+                'selectedUsers': _selectedUsers,
+              });
             }
           },
           child: const Text('Create'),
@@ -561,17 +571,32 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
 
     if (preferences == null) return;
     
-    final result = <String, dynamic>{
-      'name': '${_firstNameController.text} ${_lastNameController.text}'.trim(),
-      'first_name': _firstNameController.text,
-      'last_name': _lastNameController.text,
-      'email': _emailController.text,
-      'is_user': false,
-      'dietary_requirements': preferences['dietary_requirements'] ?? [],
-      'restaurant_preferences': preferences['restaurant_preferences'] ?? [],
-    };
-    
-    Navigator.pop(context, result);
+    try {
+      // First create a profile for the new member
+      final response = await _supabase.from('profiles').insert({
+        'first_name': _firstNameController.text,
+        'last_name': _lastNameController.text,
+        'email': _emailController.text,
+        'name': '${_firstNameController.text} ${_lastNameController.text}'.trim(),
+        'dietary_requirements': preferences['dietary_requirements'] ?? [],
+        'restaurant_preferences': preferences['restaurant_preferences'] ?? [],
+      }).select().single();
+      
+      // Create User object with the new profile's ID
+      final user = User(
+        id: response['id'],
+        email: response['email'] ?? '',
+        firstName: response['first_name'],
+        lastName: response['last_name'],
+      );
+      
+      Navigator.pop(context, user);
+    } catch (e) {
+      debugPrint('Error creating member profile: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error creating member: $e')),
+      );
+    }
   }
 
   void _handleExistingUser(Map<String, dynamic> userData) {

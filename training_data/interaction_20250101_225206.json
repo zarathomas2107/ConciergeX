@@ -1,0 +1,8 @@
+{
+  "query": "Looking for vegetarian Asian food near Apollo Theatre for @colleagues, budget-friendly",
+  "steps": [],
+  "final_result": {
+    "output": "Agent stopped due to iteration limit or time limit.",
+    "intermediate_steps": [
+      [
+        
