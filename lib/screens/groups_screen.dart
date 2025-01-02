@@ -189,20 +189,39 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   child: ExpansionTile(
                     title: Text(group.name),
                     subtitle: Text('${group.memberIds.length} members'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteGroup(group),
+                        ),
+                        const Icon(Icons.expand_more),
+                      ],
+                    ),
                     children: [
                       FutureBuilder<List<Map<String, dynamic>>>(
                         future: _loadMemberDetails(group.memberIds),
                         builder: (context, snapshot) {
                           if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const CircularProgressIndicator();
+                            return const Center(child: CircularProgressIndicator());
                           }
                           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Text('No members');
+                            return const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text('No members'),
+                            );
                           }
                           return Column(
                             children: snapshot.data!.map((member) => ListTile(
-                              title: Text(member['name'] ?? 'Unknown'),
-                              subtitle: Text(member['email'] ?? ''),
+                              title: Text(
+                                member['name'] ?? 
+                                '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              subtitle: member['email'] != null 
+                                ? Text(member['email']) 
+                                : null,
                             )).toList(),
                           );
                         },
@@ -277,6 +296,55 @@ class _GroupsScreenState extends State<GroupsScreen> {
       ),
     );
     _loadGroups();  // Reload to show updated preferences
+  }
+
+  Future<void> _deleteGroup(Group group) async {
+    // Show confirmation dialog
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Group'),
+        content: Text('Are you sure you want to delete "${group.name}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true || !mounted) return;
+
+    try {
+      await _supabase
+          .from('groups')
+          .delete()
+          .eq('id', group.id);
+
+      if (mounted) {
+        setState(() {
+          _groups.removeWhere((g) => g.id == group.id);
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Group deleted successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting group: $e')),
+        );
+      }
+    }
   }
 
   @override
