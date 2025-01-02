@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../services/ai_service.dart';
 import '../models/group.dart';
 import 'groups_screen.dart';
@@ -14,8 +16,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _supabase = Supabase.instance.client;
+  final _imagePicker = ImagePicker();
   Map<String, dynamic>? _profile;
   bool _loading = true;
+  bool _uploadingImage = false;
   String? _error;
   List<Map<String, dynamic>> _searchResults = [];
   Map<String, bool> _dietaryRequirements = {};
@@ -24,6 +28,165 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Group? _selectedGroup;
   final _searchController = TextEditingController();
   List<Map<String, dynamic>>? _groupSuggestions;
+
+  Future<void> _uploadProfilePicture() async {
+    try {
+      setState(() => _uploadingImage = true);
+      debugPrint('Starting image upload process...');
+
+      // Pick image from gallery
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 80,
+        requestFullMetadata: false,
+      );
+
+      debugPrint('Image picked: ${image?.path}');
+
+      if (image == null) {
+        debugPrint('No image selected');
+        setState(() => _uploadingImage = false);
+        return;
+      }
+
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
+      debugPrint('User ID: $userId');
+
+      // Read file as bytes for iOS compatibility
+      final bytes = await image.readAsBytes();
+      final fileExt = image.path.split('.').last.toLowerCase();
+      final fileName = '$userId/profile.$fileExt';
+      
+      debugPrint('Uploading file: $fileName');
+      
+      // First try to delete any existing profile picture
+      try {
+        await _supabase.storage
+            .from('profile_pictures')
+            .remove(['$userId/profile.jpg', '$userId/profile.jpeg', '$userId/profile.png']);
+      } catch (e) {
+        debugPrint('No existing profile picture to delete or error: $e');
+      }
+
+      // Upload new profile picture
+      final response = await _supabase.storage
+          .from('profile_pictures')
+          .uploadBinary(
+            fileName, 
+            bytes,
+            fileOptions: FileOptions(
+              upsert: true,
+              contentType: 'image/$fileExt',
+            ),
+          );
+      debugPrint('Upload response: $response');
+
+      // Get public URL for the image
+      final imageUrl = _supabase.storage
+          .from('profile_pictures')
+          .getPublicUrl(fileName);
+      debugPrint('Image URL: $imageUrl');
+
+      // Update profile with new avatar URL
+      await _supabase
+          .from('profiles')
+          .update({
+            'avatar_url': imageUrl,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
+      debugPrint('Profile updated with new avatar URL');
+
+      // Reload profile
+      await _loadProfile();
+      debugPrint('Profile reloaded');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile picture updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error uploading image: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingImage = false);
+      }
+    }
+  }
+
+  Widget _buildProfileHeader() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              GestureDetector(
+                onTap: _uploadingImage ? null : _uploadProfilePicture,
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: _profile?['avatar_url'] != null
+                      ? NetworkImage(_profile!['avatar_url'])
+                      : null,
+                  child: _uploadingImage
+                      ? const CircularProgressIndicator()
+                      : _profile?['avatar_url'] == null
+                          ? const Icon(Icons.person, size: 50)
+                          : null,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  _uploadingImage ? Icons.hourglass_empty : Icons.camera_alt,
+                  size: 20,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '${_profile?['first_name'] ?? ''} ${_profile?['last_name'] ?? ''}'.trim(),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          if (_profile?['email'] != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              _profile!['email'],
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -302,12 +465,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.grey[200],
-                      child: const Icon(Icons.person, size: 50),
-                    ),
-                    const SizedBox(height: 32),
+                    _buildProfileHeader(),
+                    const Divider(),
                     ListTile(
                       title: const Text('Name'),
                       subtitle: Text('${_profile?['first_name'] ?? 'Not set'} ${_profile?['last_name'] ?? ''}'),

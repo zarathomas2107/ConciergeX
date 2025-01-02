@@ -1,35 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/restaurant.dart';
-
-class DateButton extends StatelessWidget {
-  final String date;
-  final VoidCallback onTap;
-
-  const DateButton({
-    Key? key,
-    required this.date,
-    required this.onTap,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Color(0xFF90EE90), // Light pastel green
-          foregroundColor: Colors.black87,
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-        ),
-        child: Text(date),
-      ),
-    );
-  }
-}
+import 'availability_dialog.dart';
 
 class RestaurantCard extends StatelessWidget {
   final Restaurant restaurant;
@@ -44,23 +15,25 @@ class RestaurantCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      clipBehavior: Clip.antiAlias,
+      margin: const EdgeInsets.all(8.0),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => AvailabilityDialog(restaurant: restaurant),
+          );
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image section
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            AspectRatio(
+              aspectRatio: 16 / 9,
               child: Image.network(
                 restaurant.photoUrl,
-                height: 200,
-                width: double.infinity,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    height: 200,
                     color: Colors.grey[300],
                     child: const Center(
                       child: Icon(Icons.restaurant, size: 50),
@@ -69,65 +42,61 @@ class RestaurantCard extends StatelessWidget {
                 },
               ),
             ),
-            
-            // Content section
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Restaurant name and rating
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         child: Text(
                           restaurant.name,
-                          style: Theme.of(context).textTheme.titleLarge,
+                          style: Theme.of(context).textTheme.titleMedium,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (restaurant.rating != null)
-                        Row(
-                          children: [
-                            const Icon(Icons.star, color: Colors.amber, size: 20),
-                            const SizedBox(width: 4),
-                            Text(
-                              restaurant.rating!.toStringAsFixed(1),
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // Cuisine type and price level
-                  Row(
-                    children: [
-                      if (restaurant.cuisineType != null) ...[
-                        Text(
-                          restaurant.cuisineType!,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text('•'),
-                        const SizedBox(width: 8),
-                      ],
                       Text(
                         restaurant.getPriceLevel(),
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  
-                  // Distance if available
-                  if (restaurant.distance != null)
+                  Text(
+                    restaurant.cuisineType,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, size: 16, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text(
+                        restaurant.rating.toStringAsFixed(1),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      if (restaurant.distance != null) ...[
+                        const SizedBox(width: 16),
+                        const Icon(Icons.location_on, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${(restaurant.distance! / 1000).toStringAsFixed(1)}km',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (restaurant.availableSlots?.isNotEmpty == true) ...[
+                    const SizedBox(height: 8),
                     Text(
-                      '${(restaurant.distance! / 1000).toStringAsFixed(1)}km away',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      'Available',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                     ),
+                  ],
                 ],
               ),
             ),

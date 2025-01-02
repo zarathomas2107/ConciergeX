@@ -38,9 +38,12 @@ class PreferencesAgent:
             
             if response.data and len(response.data) > 0:
                 user_data = response.data[0]
+                # Normalize case and deduplicate excluded cuisines
+                raw_cuisines = user_data.get('excluded_cuisines', []) or []
+                excluded_cuisines = list({cuisine.title() for cuisine in raw_cuisines})
                 return {
                     'dietary_requirements': user_data.get('dietary_requirements', []) or [],
-                    'excluded_cuisines': user_data.get('excluded_cuisines', []) or []
+                    'excluded_cuisines': excluded_cuisines
                 }
             return {
                 'dietary_requirements': [],
@@ -101,34 +104,32 @@ class PreferencesAgent:
             print(f"Group lookup response: {group_response.data}")
             
             group = group_response.data[0]
-            # Convert member_ids to list if it's a string
             member_ids = group.get('member_ids', [])
-            if isinstance(member_ids, str):
-                member_ids = [m.strip() for m in member_ids.split(',')]
             print(f"Found member IDs: {member_ids}")
             
-            if not member_ids:
-                print(f"No members found for group '{group_name}'")
-                return {
-                    'dietary_requirements': [],
-                    'excluded_cuisines': []
-                }
-
-            all_dietary_requirements = set()
-            all_excluded_cuisines = set()
-
+            # Initialize sets for unique values
+            dietary_requirements = set()
+            excluded_cuisines_raw = []
+            
+            # Get preferences for each member
             for member_id in member_ids:
                 member_prefs = await self.get_user_requirements(member_id)
                 print(f"Preferences for member {member_id}: {member_prefs}")
-                all_dietary_requirements.update(member_prefs.get('dietary_requirements', []))
-                all_excluded_cuisines.update(member_prefs.get('excluded_cuisines', []))
+                
+                # Add to sets (will automatically deduplicate)
+                dietary_requirements.update(member_prefs.get('dietary_requirements', []))
+                excluded_cuisines_raw.extend(member_prefs.get('excluded_cuisines', []))
             
-            result = {
-                'dietary_requirements': list(all_dietary_requirements),
-                'excluded_cuisines': list(all_excluded_cuisines)
+            # Normalize and deduplicate excluded cuisines
+            excluded_cuisines = list({cuisine.title() for cuisine in excluded_cuisines_raw})
+            
+            # Convert back to lists
+            final_prefs = {
+                'dietary_requirements': list(dietary_requirements),
+                'excluded_cuisines': excluded_cuisines
             }
-            print(f"Final combined preferences: {result}")
-            return result
+            print(f"Final combined preferences: {final_prefs}")
+            return final_prefs
             
         except Exception as e:
             print(f'Error getting group preferences: {e}')
@@ -136,6 +137,27 @@ class PreferencesAgent:
                 'dietary_requirements': [],
                 'excluded_cuisines': []
             }
+
+    async def get_available_groups(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all groups that the user is a member of or has created.
+        
+        Args:
+            user_id (str): The ID of the user
+            
+        Returns:
+            List[Dict[str, Any]]: List of groups with their details
+        """
+        try:
+            response = self.supabase.rpc('get_user_groups', {'user_id_input': user_id}).execute()
+            
+            if response.data:
+                return response.data
+            return []
+            
+        except Exception as e:
+            print(f'Error getting available groups: {e}')
+            return []
 
     async def extract_preferences(self, query: str, user_id: str) -> Dict[str, Any]:
         """
@@ -148,12 +170,26 @@ class PreferencesAgent:
         Returns:
             Dict[str, Any]: Combined preferences including:
                 - group: Group name if mentioned
+                - available_groups: List of available groups if @ is mentioned without a specific group
                 - cuisine_types: List of cuisine types mentioned
                 - meal_time: Meal time if mentioned
                 - dietary_requirements: Combined dietary requirements
                 - excluded_cuisines: Combined excluded cuisines
         """
         try:
+            # Check if query contains @ without a specific group
+            if '@' in query and not any(c.isalnum() for c in query[query.index('@')+1:].split()[0]):
+                # Get available groups
+                available_groups = await self.get_available_groups(user_id)
+                return {
+                    'group': None,
+                    'available_groups': available_groups,
+                    'cuisine_types': [],
+                    'meal_time': None,
+                    'dietary_requirements': [],
+                    'excluded_cuisines': []
+                }
+
             # Extract preferences using OpenAI
             messages = [
                 {"role": "system", "content": """You are a restaurant preferences assistant. Extract preferences from user queries.
@@ -189,6 +225,7 @@ class PreferencesAgent:
             # Combine all preferences
             return {
                 'group': extracted.get('group'),
+                'available_groups': None,  # Only included when @ is used without a group name
                 'cuisine_types': extracted.get('cuisine_types', []),
                 'meal_time': extracted.get('meal_time'),
                 'dietary_requirements': preferences.get('dietary_requirements', []),
@@ -199,6 +236,7 @@ class PreferencesAgent:
             print(f'Error extracting preferences: {e}')
             return {
                 'group': None,
+                'available_groups': None,
                 'cuisine_types': [],
                 'meal_time': None,
                 'dietary_requirements': [],

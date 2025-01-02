@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/restaurant.dart';
+import '../services/restaurant_service.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 
@@ -111,23 +112,9 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                 ],
               ),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search restaurants (e.g., "Italian near Apollo Theatre")...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Theme.of(context).cardColor,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 10,
-                  ),
-                ),
-                onSubmitted: (query) async {
-                  if (_currentIndex == 0 && query.isNotEmpty) {
+              child: SearchBarWithMentions(
+                onSearch: (query) async {
+                  if (query.isNotEmpty) {
                     try {
                       await _homeScreenKey.currentState?.filterRestaurants(query);
                     } catch (e) {
@@ -188,5 +175,164 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
     );
+  }
+}
+
+class SearchBarWithMentions extends StatefulWidget {
+  final Function(String) onSearch;
+
+  const SearchBarWithMentions({
+    Key? key,
+    required this.onSearch,
+  }) : super(key: key);
+
+  @override
+  _SearchBarWithMentionsState createState() => _SearchBarWithMentionsState();
+}
+
+class _SearchBarWithMentionsState extends State<SearchBarWithMentions> {
+  final _searchController = TextEditingController();
+  final _supabase = Supabase.instance.client;
+  final _restaurantService = RestaurantService();
+  List<Map<String, dynamic>> _groups = [];
+  bool _showGroupSuggestions = false;
+  int _mentionStart = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    final text = _searchController.text;
+    final selection = _searchController.selection;
+    
+    if (selection.baseOffset != selection.extentOffset) return;
+    
+    // Find the last @ symbol before the cursor
+    final beforeCursor = text.substring(0, selection.baseOffset);
+    _mentionStart = beforeCursor.lastIndexOf('@');
+    
+    if (_mentionStart >= 0 && _mentionStart == beforeCursor.length - 1) {
+      // Just typed @, show all groups
+      _loadGroups();
+    } else if (_mentionStart >= 0 && beforeCursor.substring(_mentionStart + 1).contains(' ')) {
+      // If there's a space after @, hide suggestions
+      setState(() {
+        _showGroupSuggestions = false;
+      });
+    } else if (_mentionStart >= 0) {
+      // Filter groups based on what's typed after @
+      final query = beforeCursor.substring(_mentionStart + 1).toLowerCase();
+      setState(() {
+        _groups = _groups.where((group) => 
+          group['name'].toString().toLowerCase().contains(query)
+        ).toList();
+        _showGroupSuggestions = _groups.isNotEmpty;
+      });
+    } else {
+      setState(() {
+        _showGroupSuggestions = false;
+      });
+    }
+  }
+
+  Future<void> _loadGroups() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final groups = await _restaurantService.getAvailableGroups(userId);
+      if (mounted) {
+        setState(() {
+          _groups = groups;
+          _showGroupSuggestions = groups.isNotEmpty;
+        });
+      }
+    } catch (e) {
+      print('Error loading groups: $e');
+    }
+  }
+
+  void _selectGroup(Map<String, dynamic> group) {
+    final text = _searchController.text;
+    final beforeMention = text.substring(0, _mentionStart);
+    final afterMention = text.substring(_searchController.selection.baseOffset);
+    final newText = '$beforeMention@${group['name']}$afterMention';
+    
+    setState(() {
+      _searchController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(
+          offset: _mentionStart + group['name'].toString().length + 1,
+        ),
+      );
+      _showGroupSuggestions = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _searchController,
+          maxLines: null,
+          minLines: 1,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Search restaurants (e.g., "Italian near Apollo Theatre")...',
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(25),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Theme.of(context).cardColor,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 12,
+            ),
+            isDense: true,
+          ),
+          onSubmitted: widget.onSearch,
+        ),
+        if (_showGroupSuggestions)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            constraints: const BoxConstraints(maxHeight: 200),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _groups.length,
+              itemBuilder: (context, index) {
+                final group = _groups[index];
+                return ListTile(
+                  title: Text(group['name']),
+                  onTap: () => _selectGroup(group),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }

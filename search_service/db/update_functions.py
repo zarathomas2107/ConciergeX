@@ -160,6 +160,100 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 '''
 
+find_restaurants_near_venue_sql = '''
+-- Drop all versions of the function first
+DO $$ 
+BEGIN
+    DROP FUNCTION IF EXISTS find_restaurants_near_venue(numeric, numeric, text[], text[], integer);
+    DROP FUNCTION IF EXISTS find_restaurants_near_venue(double precision, double precision, text[], text[], integer);
+EXCEPTION 
+    WHEN others THEN 
+        NULL;
+END $$;
+
+-- Function to find restaurants near a venue with various filters
+CREATE OR REPLACE FUNCTION find_restaurants_near_venue(
+    venue_lat double precision,
+    venue_lon double precision,
+    excluded_cuisines text[] DEFAULT NULL,
+    cuisine_types text[] DEFAULT NULL,
+    max_results integer DEFAULT 200
+)
+RETURNS TABLE (
+    id text,
+    name text,
+    cuisine_type text,
+    address text,
+    rating double precision,
+    price_level integer,
+    latitude double precision,
+    longitude double precision,
+    distance double precision
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH base_query AS (
+        SELECT 
+            r."RestaurantID" as id,
+            r."Name" as name,
+            r."CuisineType" as cuisine_type,
+            r."Address" as address,
+            r."Rating" as rating,
+            CAST(r."PriceLevel" AS integer) as price_level,
+            r."latitude" as latitude,
+            r."longitude" as longitude,
+            ST_Distance(
+                r.location::geography,
+                ST_SetSRID(ST_MakePoint(venue_lon, venue_lat), 4326)::geography
+            ) as distance
+        FROM restaurants r
+        WHERE 
+            -- Excluded cuisines filter (case-insensitive)
+            (excluded_cuisines IS NULL OR 
+             NOT EXISTS (
+                SELECT 1 FROM unnest(excluded_cuisines) ec 
+                WHERE LOWER(r."CuisineType") = LOWER(ec)
+             ))
+            -- Cuisine types filter (case-insensitive)
+            AND (cuisine_types IS NULL OR 
+                 EXISTS (
+                    SELECT 1 FROM unnest(cuisine_types) ct 
+                    WHERE LOWER(r."CuisineType") = LOWER(ct)
+                 ))
+    )
+    SELECT *
+    FROM base_query
+    ORDER BY distance ASC
+    LIMIT max_results;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permission on the function
+GRANT EXECUTE ON FUNCTION find_restaurants_near_venue(double precision, double precision, text[], text[], integer) TO authenticated;
+'''
+
+get_user_groups_sql = '''
+-- Function to get groups for a user
+CREATE OR REPLACE FUNCTION get_user_groups(user_id_input uuid)
+RETURNS TABLE (
+    id uuid,
+    name text,
+    member_ids uuid[],
+    created_by uuid
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT g.id, g.name, g.member_ids, g.created_by
+    FROM public.groups g
+    WHERE user_id_input = ANY(g.member_ids)
+    OR g.created_by = user_id_input;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permission on the function
+GRANT EXECUTE ON FUNCTION get_user_groups(uuid) TO authenticated;
+'''
+
 def update_functions():
     try:
         # Update search_cinemas function
@@ -173,6 +267,14 @@ def update_functions():
         # Update filter_restaurants function
         result = supabase.rpc('exec_sql', {'sql': filter_restaurants_sql}).execute()
         print("Updated filter_restaurants function:", result)
+
+        # Update find_restaurants_near_venue function
+        result = supabase.rpc('exec_sql', {'sql': find_restaurants_near_venue_sql}).execute()
+        print("Updated find_restaurants_near_venue function:", result)
+
+        # Update get_user_groups function
+        result = supabase.rpc('exec_sql', {'sql': get_user_groups_sql}).execute()
+        print("Updated get_user_groups function:", result)
 
     except Exception as e:
         print(f"Error updating functions: {e}")

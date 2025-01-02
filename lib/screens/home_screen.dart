@@ -126,6 +126,12 @@ class HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic> _currentPreferences = {};
   final _supabase = Supabase.instance.client;
 
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -135,7 +141,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> filterRestaurants(String query) async {
     if (query.isEmpty) {
-      setState(() {
+      _safeSetState(() {
         _filteredRestaurants = _restaurants;
         _availableGroups = [];
         _showingGroups = false;
@@ -145,7 +151,7 @@ class HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    setState(() => _isSearching = true);
+    _safeSetState(() => _isSearching = true);
 
     try {
       final restaurantService = RestaurantService();
@@ -156,7 +162,7 @@ class HomeScreenState extends State<HomeScreen> {
 
       final searchResponse = await restaurantService.searchWithAgent(query, userId);
       
-      setState(() {
+      _safeSetState(() {
         _filteredRestaurants = searchResponse.restaurants;
         _availableGroups = searchResponse.availableGroups;
         _showingGroups = searchResponse.showingGroups;
@@ -172,7 +178,7 @@ class HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       print('Error filtering restaurants: $e');
-      setState(() {
+      _safeSetState(() {
         _filteredRestaurants = [];
         _availableGroups = [];
         _showingGroups = false;

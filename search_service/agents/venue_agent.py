@@ -136,7 +136,15 @@ class VenueAgent:
                             "location_context": "string, any additional location context"
                         }
                         
-                        Example: For "restaurants near Odeon Leicester Square for dinner", respond with:
+                        IMPORTANT RULES:
+                        1. ONLY extract venues that are EXPLICITLY mentioned in the query
+                        2. If no venue is mentioned, or if you're not completely sure about the venue, return empty values
+                        3. Do not make assumptions about venues
+                        4. Do not extract venue names from context or implications
+                        5. The confidence should be 0 unless a venue is explicitly mentioned
+                        
+                        Examples:
+                        1. "restaurants near Odeon Leicester Square for dinner" ->
                         {
                           "venue_name": "London Leicester Square",
                           "venue_type": "cinema",
@@ -144,12 +152,12 @@ class VenueAgent:
                           "location_context": "Leicester Square area"
                         }
                         
-                        If no venue is mentioned or the query is empty, respond with:
+                        2. "looking for restaurants in London" ->
                         {
                           "venue_name": "",
                           "venue_type": "",
                           "confidence": 0,
-                          "location_context": ""
+                          "location_context": "London"
                         }
                         
                         Always respond with valid JSON. Do not include any other text.
