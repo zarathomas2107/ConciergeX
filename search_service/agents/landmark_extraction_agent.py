@@ -12,15 +12,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_embedding(text: str, model: str = "nomic-embed-text") -> list[float]:
-    """Get embedding from Ollama"""
+    """Get embedding from our FastAPI service"""
     try:
+        print(f"\n🔄 Getting embedding for: {text}")
         response = requests.post(
-            'http://localhost:11434/api/embeddings',
-            json={"model": model, "prompt": text}
+            'http://localhost:8000/embeddings',
+            json={"text": text, "model": model}
         )
-        return response.json()["embedding"]
+        print(f"📡 Embedding API response status: {response.status_code}")
+        if response.status_code == 200:
+            return response.json()["embedding"]
+        print(f"❌ Failed to get embedding: {response.text}")
+        return None
     except Exception as e:
-        logger.error(f"Error getting embedding for text '{text}': {str(e)}")
+        print(f"❌ Error getting embedding: {str(e)}")
         return None
 
 class LandmarkExtractionAgent(LlamaAgent):

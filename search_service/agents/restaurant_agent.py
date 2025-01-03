@@ -2,9 +2,11 @@ from typing import Dict, Any, List
 from openai import AsyncOpenAI
 from supabase import create_client, Client
 import os
-from .venue_agent import VenueAgent
+from .landmark_extraction_agent import LandmarkExtractionAgent
 from .preferences_agent import PreferencesAgent
 from .datetime_agent import DateTimeAgent
+from ..clients.google_places import GooglePlacesClient
+from ..clients.supabase import SupabaseClient
 import asyncio
 
 class RestaurantAgent:
@@ -15,7 +17,9 @@ class RestaurantAgent:
             raise ValueError("Missing required environment variables")
 
         self.supabase: Client = create_client(url, key)
-        self.venue_agent = VenueAgent()
+        self.supabase_client = SupabaseClient()
+        self.google_places_client = GooglePlacesClient()
+        self.landmark_agent = LandmarkExtractionAgent(self.google_places_client, self.supabase_client)
         self.preferences_agent = PreferencesAgent(use_service_key)
         self.datetime_agent = DateTimeAgent()
 
@@ -29,30 +33,34 @@ class RestaurantAgent:
             
         Returns:
             Dict containing:
-            - venue: Validated venue information from venue_agent
+            - venue: Validated venue information from landmark_agent
             - preferences: Extracted user/group preferences from preferences_agent
             - datetime: Extracted date and time information
             - restaurants: List of matching restaurants
         """
         try:
             # Get venue, preferences, and datetime in parallel for better performance
-            venue_task = self.venue_agent.validate_venue(query)
+            venue_task = self.landmark_agent.search_and_enrich_terms(query)
             preferences_task = self.preferences_agent.extract_preferences(query, user_id)
-            datetime_task = self.datetime_agent.extract_datetime(query)
+            datetime_task = self.datetime_agent.extract_datetime_info(query)
             
-            venue, preferences, datetime_info = await asyncio.gather(
+            venues, preferences, datetime_info = await asyncio.gather(
                 venue_task, 
                 preferences_task,
                 datetime_task
             )
             
-            if 'error' in venue:
-                return {'error': venue['error']}
+            if not venues:
+                return {'error': 'No venue found in query'}
+
+            # Use the first venue found
+            venue = venues[0]
+            lat, lon = map(float, venue['location'].split(','))
 
             # Find restaurants near the venue that match preferences
             restaurants = await self._search_restaurants(
-                latitude=venue['latitude'],
-                longitude=venue['longitude'],
+                latitude=lat,
+                longitude=lon,
                 excluded_cuisines=preferences.get('excluded_cuisines', []),
                 cuisine_types=preferences.get('cuisine_types', []),
                 dietary_requirements=preferences.get('dietary_requirements', []),
@@ -100,6 +108,7 @@ class RestaurantAgent:
                     'venue_lon': longitude,
                     'excluded_cuisines': excluded_cuisines if excluded_cuisines else None,
                     'cuisine_types': cuisine_types if cuisine_types else None,
+                    'dietary_requirements': dietary_requirements if dietary_requirements else None,
                     'start_date': start_date if start_date else None,
                     'end_date': end_date if end_date else None,
                     'start_time': start_time if start_time else None,

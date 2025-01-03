@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 from openai import AsyncOpenAI
-from supabase import create_client, Client
+from supabase.client import Client, create_client
 import os
 import json
 from dotenv import load_dotenv
@@ -17,6 +17,18 @@ class PreferencesAgent:
 
         self.supabase: Client = create_client(url, key)
         self.openai = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    def query_table(self, table_name: str, schema: str = 'development') -> Any:
+        """Helper function to query a table with schema.
+        
+        Args:
+            table_name: Name of the table to query
+            schema: Schema name, defaults to 'development'
+            
+        Returns:
+            The table query builder
+        """
+        return self.supabase.table(f'{schema}.{table_name}')
 
     async def get_user_requirements(self, user_id: str) -> Dict[str, List[str]]:
         """
