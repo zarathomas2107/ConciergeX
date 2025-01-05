@@ -1,0 +1,25 @@
+# LLM and Agent Dependencies
+langchain>=0.0.350
+langchain-core>=0.1.0
+langchain-community>=0.0.10
+langchain-openai>=0.0.3
+openai>=1.3.5
+wandb>=0.16.1
+
+# Database and API Dependencies
+supabase>=1.0.3
+postgrest>=0.10.6  # Required by supabase-py
+
+# Utility Dependencies for LLM Service
+python-dotenv>=1.0.0
+pydantic>=2.4.2
+httpx>=0.25.1
+
+# FastAPI Dependencies (for serving the LLM service)
+fastapi>=0.104.1
+uvicorn>=0.24.0
+
+# Optional: Development Tools
+pytest>=7.4.3
+pytest-asyncio>=0.21.1  # for testing async functions
+black>=23.11.0  # for code formatting 
