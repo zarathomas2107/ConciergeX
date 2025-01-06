@@ -1,128 +1,96 @@
-from typing import Dict, Any, List
-from openai import AsyncOpenAI
+from typing import Dict, Any, List, Tuple
 from supabase import create_client, Client
 import os
-from .landmark_extraction_agent import LandmarkExtractionAgent
-from .preferences_agent import PreferencesAgent
-from .datetime_agent import DateTimeAgent
-from ..clients.google_places import GooglePlacesClient
-from ..clients.supabase import SupabaseClient
-import asyncio
+from search_service.agents.location_detection import LocationDetectionAgent
+from search_service.agents.preferences import PreferencesAgent
+from search_service.agents.datetime_detection import DateTimeAgent
+from search_service.clients.supabase_client import SupabaseClient
+import logging
+import dotenv
+import sys
+import argparse
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+dotenv.load_dotenv()
 
 class RestaurantAgent:
-    def __init__(self, use_service_key: bool = False):
-        key = os.getenv("SUPABASE_SERVICE_KEY" if use_service_key else "SUPABASE_KEY", "")
-        url = os.getenv("SUPABASE_URL", "")
-        if not url or not key:
-            raise ValueError("Missing required environment variables")
-
-        self.supabase: Client = create_client(url, key)
-        self.supabase_client = SupabaseClient()
-        self.google_places_client = GooglePlacesClient()
-        self.landmark_agent = LandmarkExtractionAgent(self.google_places_client, self.supabase_client)
-        self.preferences_agent = PreferencesAgent(use_service_key)
-        self.datetime_agent = DateTimeAgent()
-
-    async def find_restaurants(self, query: str, user_id: str) -> Dict[str, Any]:
+    """Agent for handling restaurant search and recommendations."""
+    
+    def __init__(self):
+        """Initialize the RestaurantAgent with required clients and sub-agents."""
+        self.supabase = SupabaseClient()
+        self.preferences_agent = PreferencesAgent()
+        self.location_detection_agent = LocationDetectionAgent()
+        self.date_time_agent = DateTimeAgent()
+        
+    def process_query(self, query: str, user_id: str) -> Dict[str, Any]:
         """
-        Find restaurants near a venue that match user preferences.
+        Process a restaurant search query to extract all relevant information.
         
         Args:
-            query (str): User query containing venue, preferences, and datetime info
-            user_id (str): ID of the user making the request
+            query (str): The search query from the user
+            user_id (str): The ID of the user making the request
             
         Returns:
-            Dict containing:
-            - venue: Validated venue information from landmark_agent
-            - preferences: Extracted user/group preferences from preferences_agent
-            - datetime: Extracted date and time information
-            - restaurants: List of matching restaurants
+            Dict[str, Any]: Processed query information including:
+                - preferences: dietary requirements and cuisine types
+                - location: venue ID, name, and address
+                - datetime: timing preferences
         """
         try:
-            # Get venue, preferences, and datetime in parallel for better performance
-            venue_task = self.landmark_agent.search_and_enrich_terms(query)
-            preferences_task = self.preferences_agent.extract_preferences(query, user_id)
-            datetime_task = self.datetime_agent.extract_datetime_info(query)
-            
-            venues, preferences, datetime_info = await asyncio.gather(
-                venue_task, 
-                preferences_task,
-                datetime_task
+            # Extract user/group preferences
+            preferences = self.preferences_agent.extract_preferences(
+                query=query, 
+                user_id=user_id
             )
+            logger.info(f"Extracted preferences: {preferences}")
             
-            if not venues:
-                return {'error': 'No venue found in query'}
-
-            # Use the first venue found
-            venue = venues[0]
-            lat, lon = map(float, venue['location'].split(','))
-
-            # Find restaurants near the venue that match preferences
-            restaurants = await self._search_restaurants(
-                latitude=lat,
-                longitude=lon,
-                excluded_cuisines=preferences.get('excluded_cuisines', []),
-                cuisine_types=preferences.get('cuisine_types', []),
-                dietary_requirements=preferences.get('dietary_requirements', []),
-                start_date=datetime_info.get('start_date', ''),
-                end_date=datetime_info.get('end_date', ''),
-                start_time=datetime_info.get('start_time', ''),
-                end_time=datetime_info.get('end_time', ''),
-                limit=200
+            # Detect location
+            location_id, venue_name, address = self.location_detection_agent.detect_location(
+                query=query
             )
-
+            logger.info(f"Detected location: {venue_name} at {address}")
+            
+            # Extract date/time preferences
+            datetime_info = self.date_time_agent.process_query(query)
+            logger.info(f"Extracted datetime info: {datetime_info}")
+            
             return {
-                'venue': venue,
-                'preferences': preferences,
-                'datetime': datetime_info,
-                'restaurants': restaurants
+                "preferences": preferences,
+                "location": {
+                    "id": location_id,
+                    "name": venue_name,
+                    "address": address
+                },
+                "datetime": datetime_info
             }
-
+            
         except Exception as e:
-            print(f"Error finding restaurants: {e}")
-            return {'error': str(e)}
+            logger.error(f"Error processing query: {str(e)}")
+            raise
 
-    async def _search_restaurants(
-        self,
-        latitude: float,
-        longitude: float,
-        excluded_cuisines: List[str],
-        cuisine_types: List[str],
-        dietary_requirements: List[str],
-        start_date: str = '',
-        end_date: str = '',
-        start_time: str = '',
-        end_time: str = '',
-        limit: int = 200
-    ) -> List[Dict[str, Any]]:
-        """
-        Search for restaurants near a location with filters.
-        Supports excluded cuisines, specific cuisine types, and datetime filters.
-        """
-        try:
-            # Call the database function to find nearby restaurants using async RPC
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: self.supabase.rpc(
-                    'find_restaurants_near_venue',
-                    {
-                        'venue_lat': latitude,
-                        'venue_lon': longitude,
-                        'excluded_cuisines': excluded_cuisines if excluded_cuisines else None,
-                        'cuisine_types': cuisine_types if cuisine_types else None,
-                        'dietary_requirements': dietary_requirements if dietary_requirements else None,
-                        'start_date': start_date if start_date else None,
-                        'end_date': end_date if end_date else None,
-                        'start_time': start_time if start_time else None,
-                        'end_time': end_time if end_time else None,
-                        'max_results': limit
-                    }
-                ).execute()
-            )
+# Example usage
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Process restaurant queries')
+    parser.add_argument('query', type=str, help='The search query (e.g., "Italian Restaurant with @Family in April")')
+    parser.add_argument('--user-id', type=str, default="a196d6e8-1e2e-4ded-a63c-37f4a18dc1d1",
+                      help='User ID (default: a196d6e8-1e2e-4ded-a63c-37f4a18dc1d1)')
+    
+    args = parser.parse_args()
+    
+    # Test the agent
+    agent = RestaurantAgent()
+    
+    try:
+        results = agent.process_query(args.query, args.user_id)
+        print("\nQuery Results:")
+        print(f"Preferences: {results['preferences']}")
+        print(f"Location: {results['location']}")
+        print(f"DateTime: {results['datetime']}")
+    except Exception as e:
+        print(f"Error: {str(e)}")
 
-            return result.data if result.data else []
 
-        except Exception as e:
-            print(f"Error in restaurant search: {e}")
-            return [] 
