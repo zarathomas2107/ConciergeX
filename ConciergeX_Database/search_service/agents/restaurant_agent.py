@@ -9,6 +9,7 @@ import logging
 import dotenv
 import sys
 import argparse
+import asyncio
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class RestaurantAgent:
         self.location_detection_agent = LocationDetectionAgent()
         self.date_time_agent = DateTimeAgent()
         
-    def process_query(self, query: str, user_id: str) -> Dict[str, Any]:
+    async def process_query(self, query: str, user_id: str) -> Dict[str, Any]:
         """
         Process a restaurant search query to extract all relevant information.
         
@@ -41,21 +42,24 @@ class RestaurantAgent:
                 - datetime: timing preferences
         """
         try:
-            # Extract user/group preferences
-            preferences = self.preferences_agent.extract_preferences(
-                query=query, 
-                user_id=user_id
+            # Run all extractions concurrently
+            preferences_task = asyncio.create_task(
+                self.preferences_agent.extract_preferences(query=query, user_id=user_id)
             )
+            location_task = asyncio.create_task(
+                self.location_detection_agent.detect_location(query=query)
+            )
+            datetime_task = asyncio.create_task(
+                self.date_time_agent.process_query(query)
+            )
+            
+            # Wait for all tasks to complete
+            preferences = await preferences_task
+            location_id, venue_name, address = await location_task
+            datetime_info = await datetime_task
+            
             logger.info(f"Extracted preferences: {preferences}")
-            
-            # Detect location
-            location_id, venue_name, address = self.location_detection_agent.detect_location(
-                query=query
-            )
             logger.info(f"Detected location: {venue_name} at {address}")
-            
-            # Extract date/time preferences
-            datetime_info = self.date_time_agent.process_query(query)
             logger.info(f"Extracted datetime info: {datetime_info}")
             
             return {
@@ -85,7 +89,7 @@ if __name__ == "__main__":
     agent = RestaurantAgent()
     
     try:
-        results = agent.process_query(args.query, args.user_id)
+        results = asyncio.run(agent.process_query(args.query, args.user_id))
         print("\nQuery Results:")
         print(f"Preferences: {results['preferences']}")
         print(f"Location: {results['location']}")

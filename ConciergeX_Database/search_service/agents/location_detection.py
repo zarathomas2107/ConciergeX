@@ -1,120 +1,143 @@
 import logging
-import requests
+import aiohttp
 from typing import List, Dict
 from dotenv import load_dotenv
 
-from search_service.agents.llama_agent import LlamaAgent
+from search_service.clients.openai_client import OpenAIClient
 from search_service.clients.supabase_client import SupabaseClient
 from search_service.clients.google import GoogleClient
 
 # Load environment variables and configure logging
 load_dotenv()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
-class LocationDetector:
+class LocationDetectionAgent:
     """Class for detecting and processing location information from queries."""
     
-    SIMILARITY_THRESHOLD = 0.85
+    SIMILARITY_THRESHOLD = 0.15
     TEST_QUERIES = [
-        "Let's visit the British Museum in Soho",
-        "I want to go to Tower Bridge and the Tower of London",
-        "Looking for a cinema near Covent Garden",
-        "Is there a good restaurant in Mayfair?",
-        "Want to see Big Ben",
-        "Resturants Near Kew Gardens"
+        "Italian restaurant near Databricks office in London  with @family in February for Dinner",
+        "Chinese restaurants near the Excel in London",
+        "Burger restaurants near the O2 Arena"
     ]
     
     def __init__(self):
-        """Initialize the LocationDetector with required clients."""
+        """Initialize the LocationDetectionAgent with required clients."""
         try:
+            self.logger = logging.getLogger(__name__)
+            self.logger.info("Initializing LocationDetectionAgent")
             self.supabase = SupabaseClient()
             self.google_client = GoogleClient()
-            self.llama_agent = LlamaAgent()
-            self.logger = logging.getLogger(__name__)
+            self.openai_client = OpenAIClient()
+            self.logger.info("LocationDetectionAgent initialized successfully")
         except Exception as e:
-            print(f"Error initializing LocationDetector: {str(e)}")
+            self.logger.error(f"Failed to initialize LocationDetectionAgent: {str(e)}")
             raise
 
-    def extract_terms(self, query: str) -> List[str]:
-        """
-        Extract landmark terms from a query using LlamaAgent.
-        
-        Args:
-            query (str): The input query to extract landmarks from
-            
-        Returns:
-            List[str]: List of extracted landmark terms
-        """
+    async def extract_terms(self, query: str) -> List[str]:
+        """Extract location terms from a query."""
         try:
-            self.logger.info(f"Extracting landmarks from query: {query}")        
+            self.logger.info(f"Starting location term extraction for query: '{query}'")
             
-            # Define the system prompt for landmark extraction
+            # System prompt for location extraction
             system_prompt = """
-            You are a location extraction specialist. Extract all location-related names from user queries.
-
-            Format your response as a valid JSON object with this field:
-            {
-                "extracted_terms": ["array of strings, each string being a location, landmark, venue, or area name that was explicitly mentioned"]
-            }
-
-            IMPORTANT RULES:
-            1. ONLY extract places that are EXPLICITLY mentioned
-            2. Extract ANY type of location-related terms:
-               - Landmarks: "The British Museum", "Tower Bridge", "Big Ben"
-               - Venues: "Odeon Leicester Square", "Apollo Theatre"
-               - Areas: "Soho", "Covent Garden"
-               - Generic venues: "cinema", "theatre", "museum"
-            3. Return the exact names as mentioned
-            4. Return an empty array if no locations mentioned
-
-            Example:
-            "Let's visit the British Museum in Soho" -> {"extracted_terms": ["British Museum", "Soho"]}
-            "The Tower of London is near Tower Bridge" -> {"extracted_terms": ["Tower of London", "Tower Bridge"]}
-            "Let's go to a cinema" -> {"extracted_terms": ["cinema"]}
-
-            Always respond with valid JSON. Do not include any other text.
+                You are a location extraction assistant specialized in London locations. Extract ONLY explicit location terms from queries.
+                
+                IMPORTANT: You MUST detect and return:
+                1. Famous landmarks (e.g., "Big Ben", "Tower Bridge", "British Museum", "London Eye")
+                2. Areas/neighborhoods (e.g., "Soho", "Mayfair", "Covent Garden", "Camden")
+                3. Streets (e.g., "Oxford Street", "Piccadilly", "Bond Street")
+                4. Stations (e.g., "Oxford Circus", "Waterloo", "King's Cross")
+                5. Office buildings and company locations (e.g., "Databricks office", "Google HQ", "Amazon office")
+                6. The city "London" when explicitly mentioned
+                
+                Rules:
+                1. Return ONLY explicit location mentions
+                2. Don't infer or guess locations - only return what's explicitly stated
+                3. Return an empty list if NO locations are found
+                4. Format as a JSON array of strings
+                5. Generic terms like "restaurant", "cinema", "park" are NOT locations unless they are combined with other "terms or locations"
+                6. DO include company offices when mentioned (e.g., "Databricks office", "Google office")
+                7. When a company office is mentioned, include both the company name with "office" and the city if specified
+                
+                Examples:
+                Input: "Looking for Italian food near British Museum in Bloomsbury"
+                Output: ["British Museum", "Bloomsbury"]
+                
+                Input: "Restaurant near Databricks office in London"
+                Output: ["Databricks office", "London"]
+                
+                Input: "Is there a good restaurant in Mayfair?"
+                Output: ["Mayfair"]
+                
+                Input: "Want to see Big Ben"
+                Output: ["Big Ben"]
+                
+                Input: "What's good for dinner?"
+                Output: []
+                
+                Input: "Indian Restaurant with @Family"
+                Output: []
+                
+                Input: "Looking for a cinema"
+                Output: []
             """.strip()
             
-            # Get completion from LlamaAgent - use synchronous version
-            response = self.llama_agent.get_completion(
-                query,
-                system_prompt=system_prompt
-            )
-            # Process the response
-            terms = response.get('extracted_terms', [])
-            return terms
-        
+            # Get completion from OpenAI
+            self.logger.debug("Sending query to OpenAI for location extraction")
+            response = await self.openai_client.get_completion(query, system_prompt=system_prompt)
+            
+            if not response:
+                self.logger.warning("OpenAI returned empty response")
+                return []
+                
+            # Handle both list and dictionary responses
+            if isinstance(response, list):
+                self.logger.info(f"Extracted location terms: {response}")
+                return response
+            elif isinstance(response, dict):
+                if "error" in response:
+                    self.logger.error(f"OpenAI returned error: {response['error']}")
+                    return []
+                # Try to get the raw content and parse it
+                raw_content = response.get("raw_content", "")
+                if raw_content:
+                    try:
+                        # Clean up the content
+                        content = raw_content.strip()
+                        if content.startswith("[") and content.endswith("]"):
+                            import json
+                            parsed_terms = json.loads(content)
+                            self.logger.info(f"Extracted location terms from raw content: {parsed_terms}")
+                            return parsed_terms
+                    except json.JSONDecodeError:
+                        self.logger.error(f"Failed to parse raw content as JSON: {raw_content}")
+                return []
+            
+            return []
+            
         except Exception as e:
-            self.logger.error(f"Error extracting landmarks: {str(e)}")
+            self.logger.error(f"Error extracting location terms: {str(e)}", exc_info=True)
             return []
 
-    def get_embedding(self, text: str, model: str = "nomic-embed-text") -> list[float]:
-        """Get embedding from Ollama"""
-        try:
-            response = requests.post(
-                'http://localhost:11434/api/embeddings',
-                json={"model": model, "prompt": text}
-            )
-            return response.json()["embedding"]
-        except Exception as e:
-            self.logger.error(f"Error getting embedding for text '{text}': {str(e)}")
-            return None
+    async def get_embedding(self, text: str | list) -> list[float]:
+        """Get embedding from OpenAI"""
+        return await self.openai_client.get_embedding(text)
 
-    def query_similar_pois(self, embedding: List[float]) -> List[Dict]:
-        """Query similar points of interest for the first extracted term.
-        
-        Args:
-            embedding (List[float]): Embedding of the extracted landmark terms
-            supabase_client (SupabaseClient): Initialized Supabase client
-            
-        Returns:
-            List[Dict]: List of similar points of interest
-        """
+    async def query_similar_pois(self, embedding: List[float]) -> List[Dict]:
+        """Query similar points of interest for the first extracted term."""
         try:
-            self.logger.info(f"Querying similar POIs")
+            if not embedding:
+                self.logger.warning("No embedding provided for similarity search")
+                return []
+                
+            self.logger.info("Querying similar POIs from database")
             
             # Query similar POIs using the embedding
-            results = self.supabase.rpc(
+            results = await self.supabase.rpc(
                 'search_similar_pois',
                 params={
                     'query_embedding': embedding,
@@ -122,77 +145,126 @@ class LocationDetector:
                 }
             )
             
-            return results.data if hasattr(results, 'data') else []
+            # Handle both dictionary and object responses
+            final_results = results if isinstance(results, list) else results.get('data', [])
+            if final_results:
+                self.logger.info(f"Found similar POIs: {[poi.get('name') for poi in final_results]}")
+            else:
+                self.logger.info("No similar POIs found in database")
+            return final_results
         
         except Exception as e:
-            self.logger.error(f"Error querying similar POIs: {str(e)}")
+            self.logger.error(f"Error querying similar POIs: {str(e)}", exc_info=True)
             return []
 
-    def google_places_search(self, terms: List[str]) -> List[Dict]:
-        
-        """Search for places using Google Places API
-
-        Args:
-            terms (List[str]): List of search terms
-            
-        Returns:
-            List[Dict]: List containing the most relevant place match
-        """
+    async def google_places_search(self, terms: List[str]) -> List[Dict]:
+        """Search for places using Google Places API"""
         try:
             if not terms:
-                self.logger.info("No terms provided to search")
+                self.logger.info("No terms provided for Google Places search")
                 return []
             
             # Take only the first term
             first_term = terms[0]
-            self.logger.info(f"Searching Google Places for term: {first_term}")
+            self.logger.info(f"Searching Google Places for term: '{first_term}'")
             
             # Search for places using the instance method
-            places = self.google_client.places_search(first_term)
+            places = await self.google_client.places_search_async(first_term)
             if places:
-                self.logger.info(f"Found place: {places[0].get('name')} at {places[0].get('address')}")
+                self.logger.info(f"Found place in Google Places: {places[0].get('name')} at {places[0].get('address')}")
             else:
-                self.logger.info("No places found")
+                self.logger.info("No places found in Google Places search")
                 
             return places
         
         except Exception as e:
-            self.logger.error(f"Error searching for places: {str(e)}")
+            self.logger.error(f"Error searching Google Places: {str(e)}", exc_info=True)
             return []
 
-    def detect_location(self, query: str) -> tuple[str, str, str]:
-        """Detect and retrieve venue information from query.
+    async def detect_location(self, query: str, location_id: str = "ChIJe9DRTdUadkgRAlFpoUrfj0c") -> tuple[str, str, str]:
+        """Detect and retrieve venue information from query."""
+        self.logger.info(f"Starting location detection for query: '{query}'")
         
-        Args:
-            query (str): Search query
-            
-        Returns:
-            tuple[str, str, str]: Location ID, name, and location
-        """
         # Extract and get embedding
-        extracted_terms = self.extract_terms(query)
-        embedding = self.get_embedding(extracted_terms[0])
-        similar_pois = self.query_similar_pois(embedding)
+        extracted_terms = await self.extract_terms(query)
         
-        # Get POI data either from database or Google Places
-        if similar_pois and (1 - similar_pois[0].get("similarity", 0)) >= self.SIMILARITY_THRESHOLD:
-            # Use existing POI from database
-            poi_data = similar_pois[0]
-        else:
-            # Search Google Places and store result
-            google_result = self.google_places_search(extracted_terms)[0]
-            poi_data = self.supabase.upsert_data_poi(
-                google_result, 
-                embedding, 
-                "points_of_interest"
-            ).get("data", [{}])[0]
-        
+        if not extracted_terms:
+            self.logger.info("No location terms found, using default location")
+            response = await self.supabase.query_table(
+                'points_of_interest',
+                'id,name,location',
+                [('id', location_id)]
+            )
+            # Handle both dictionary and object responses
+            data = response if isinstance(response, list) else response.get('data', [])
+            poi_data = data[0] if data else {}
+            self.logger.info(f"Using default location: {poi_data.get('name', 'Unknown')}")
+        else: 
+            self.logger.info(f"Processing extracted terms: {extracted_terms}")
+            embedding = await self.get_embedding(extracted_terms[0])
+            similar_pois = await self.query_similar_pois(embedding)
+            
+            # Get POI data either from database or Google Places
+            if similar_pois:
+                # Use existing POI from database if similarity is good enough
+                similarity = similar_pois[0].get("similarity", 0)
+                self.logger.info(f"Found POI in database with similarity score: {similarity}")
+                
+                if similarity <= self.SIMILARITY_THRESHOLD:
+                    poi_data = similar_pois[0]
+                    self.logger.info(f"Using existing POI from database: {poi_data.get('name')} (similarity: {similarity})")
+                else:
+                    self.logger.info(f"Database match below threshold ({similarity} < {self.SIMILARITY_THRESHOLD}), searching Google Places")
+                    google_results = await self.google_places_search(extracted_terms)
+                    if not google_results:
+                        self.logger.info("No Google Places results found, using closest database match instead")
+                        poi_data = similar_pois[0]  # Use the best database match even if below threshold
+                    else:
+                        google_result = google_results[0]
+                        self.logger.info(f"Upserting Google Places result: {google_result.get('name')}")
+                        upsert_response = await self.supabase.upsert_data_poi(
+                            google_result, 
+                            embedding, 
+                            "points_of_interest"
+                        )
+                        # Handle both dictionary and object responses
+                        data = upsert_response if isinstance(upsert_response, list) else upsert_response.get('data', [{}])
+                        poi_data = data[0]
+                        self.logger.info(f"Successfully upserted POI: {poi_data.get('name')}")
+            else:
+                # No database results at all, try Google Places
+                self.logger.info("No matching POIs in database, searching Google Places")
+                google_results = await self.google_places_search(extracted_terms)
+                if not google_results:
+                    self.logger.info("No Google Places results found, using default location")
+                    response = await self.supabase.query_table(
+                        'points_of_interest',
+                        'id,name,location',
+                        [('id', location_id)]
+                    )
+                    # Handle both dictionary and object responses
+                    data = response if isinstance(response, list) else response.get('data', [])
+                    poi_data = data[0] if data else {}
+                else:
+                    google_result = google_results[0]
+                    self.logger.info(f"Upserting Google Places result: {google_result.get('name')}")
+                    upsert_response = await self.supabase.upsert_data_poi(
+                        google_result, 
+                        embedding, 
+                        "points_of_interest"
+                    )
+                    # Handle both dictionary and object responses
+                    data = upsert_response if isinstance(upsert_response, list) else upsert_response.get('data', [{}])
+                    poi_data = data[0]
+
         # Extract required fields
-        return (
+        result = (
             poi_data.get("id", ""),
             poi_data.get("name", ""),
             poi_data.get("location", "")
         )
+        self.logger.info(f"Returning location data: {result}")
+        return result
 
     @classmethod
     def get_test_queries(cls) -> List[str]:
@@ -201,17 +273,23 @@ class LocationDetector:
 
 # Example usage with better error handling
 if __name__ == "__main__":
-    try:
-        detector = LocationDetector()
-        
-        for query in LocationDetector.TEST_QUERIES:  # Using class constant directly
-            try:
-                print(f"\nQuery: {query}")
-                location_info = detector.detect_location(query)
-                print(f"Location info: {location_info}")
-            except Exception as e:
-                print(f"Error processing query '{query}': {str(e)}")
-                continue
-                
-    except Exception as e:
-        print(f"Failed to initialize LocationDetector: {str(e)}")
+    import asyncio
+    
+    async def main():
+        try:
+            detector = LocationDetectionAgent()
+            logger = logging.getLogger(__name__)
+            
+            for query in LocationDetectionAgent.TEST_QUERIES:
+                try:
+                    logger.info(f"\nProcessing test query: '{query}'")
+                    location_info = await detector.detect_location(query)
+                    logger.info(f"Location info: {location_info}")
+                except Exception as e:
+                    logger.error(f"Error processing query '{query}': {str(e)}", exc_info=True)
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Failed to initialize LocationDetectionAgent: {str(e)}", exc_info=True)
+    
+    asyncio.run(main())

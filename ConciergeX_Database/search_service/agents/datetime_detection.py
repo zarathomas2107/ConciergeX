@@ -1,12 +1,22 @@
-import ollama
+import logging
 from datetime import datetime, timedelta
-from typing import Dict
+from typing import Dict, Any
+import aiohttp
 import json
+import asyncio
+from search_service.clients.openai_client import OpenAIClient
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class DateTimeAgent:
+    """Agent for detecting and processing datetime information from queries."""
+    
     def __init__(self):
-        """Initialize the DateTimeAgent with necessary configurations"""
-        self.client = ollama.Client()
+        """Initialize the DateTimeAgent."""
+        self.logger = logging.getLogger(__name__)
+        self.openai_client = OpenAIClient()
         
         # Define standard meal times and durations
         self.MEAL_TIMES = {
@@ -17,21 +27,17 @@ class DateTimeAgent:
             'meeting': {'duration': 2}  # hours
         }
         
-        # Initialize available functions
-        self.available_functions = {
-            'get_current_time': self.get_current_time,
-            'get_next_weekend': self.get_next_weekend,
-            'get_this_weekend': self.get_this_weekend,
-            'get_tonight': self.get_tonight,
-            'get_next_week': self.get_next_week,
-            'get_tomorrow': self.get_tomorrow,
-            'get_specific_day': self.get_specific_day,
-            'get_month_range': self.get_month_range,
+        # Map various time contexts to standard meal times
+        self.TIME_CONTEXT_MAP = {
+            'morning': 'breakfast',
+            'afternoon': 'lunch',
+            'evening': 'dinner',
+            'night': 'dinner'
         }
         
-        # Initialize system prompt
+        # System prompt for datetime extraction
         self.system_prompt = """
-You are a datetime extraction specialist. Your task is to extract and calculate date and time information from user queries.
+            You are a datetime extraction specialist. Your task is to extract date and time information from user queries.
 
 Format your response as a valid JSON object with these REQUIRED fields:
 {
@@ -40,74 +46,20 @@ Format your response as a valid JSON object with these REQUIRED fields:
     "start_time": "HH:MM",       // REQUIRED: Use empty string if not specified
     "end_time": "HH:MM",         // REQUIRED: Use empty string if not specified
     "day_context": "string",     // REQUIRED: today/tonight/tomorrow/next week/this weekend/next weekend/this month/monday/tuesday/etc.
-    "time_context": "string"     // REQUIRED: breakfast/lunch/dinner/brunch/meeting/empty string
+    "time_context": "string"     // REQUIRED: breakfast/lunch/dinner/brunch/meeting/morning/afternoon/evening/empty string
 }  
 
 IMPORTANT RULES:
 1. ALL fields must be included in the response
-2. start_date and end_date must ALWAYS be filled using values from tool responses
+2. start_date and end_date must ALWAYS be filled
 3. For time ranges, use EXACTLY these standard durations:
-   - For breakfast: start="07:00", end="10:00" (3 hours)
+   - For breakfast/morning: start="07:00", end="10:00" (3 hours)
    - For brunch: start="10:30", end="13:00" (2.5 hours)
-   - For lunch: start="12:00", end="14:00" (2 hours)
-   - For dinner: start="19:00", end="21:00" (2 hours)
-   - For meetings: use 2 hour duration (e.g., if start is "15:00", end must be "17:00")
-4. For date ranges:
-   - Always include both start_date and end_date from tool responses
-   - For "today" or "tonight": Use get_tonight() tool
-   - For "tomorrow": Use get_tomorrow() tool
-   - For "this weekend": Use get_this_weekend() tool
-   - For "next weekend": Use get_next_weekend() tool
-   - For "next week": Use get_next_week() tool
-   - For specific days (e.g., "Thursday"): Use get_specific_day() tool
-   - For months (e.g., "March"): Use get_month_range() tool
-
-AVAILABLE TOOLS:
-1. get_current_time: Returns Unix timestamp (seconds since epoch)
-2. get_next_weekend: Returns dictionary with next weekend's dates
-3. get_this_weekend: Returns dictionary with this weekend's dates
-4. get_tonight: Returns dictionary with tonight's date
-5. get_tomorrow: Returns dictionary with tomorrow's date
-6. get_next_week: Returns dictionary with next week's dates
-7. get_specific_day: Returns dictionary with date for a specific day
-8. get_month_range: Returns dictionary with start and end dates for a month:
-   {
-       "start_date": "YYYY-MM-DD",  // First day of the month
-       "end_date": "YYYY-MM-DD"     // Last day of the month
-   }
-
-EXAMPLE RESPONSES:
-1. Query: "Breakfast on Thursday"
-Tool call: get_specific_day("thursday") returns {"start_date": "2024-03-21", "end_date": "2024-03-21"}
-Response:
-{
-    "start_date": "2024-03-21",  // From get_specific_day tool
-    "end_date": "2024-03-21",    // From get_specific_day tool
-    "start_time": "07:00",
-    "end_time": "10:00",         // 3 hour standard breakfast duration
-    "day_context": "thursday",
-    "time_context": "breakfast"
-}
-
-2. Query: "Dinner in March"
-Tool call: get_month_range("march") returns {"start_date": "2024-03-01", "end_date": "2024-03-31"}
-Response:
-{
-    "start_date": "2024-03-01",  // From get_month_range tool
-    "end_date": "2024-03-31",    // From get_month_range tool
-    "start_time": "19:00",
-    "end_time": "21:00",         // 2 hour standard dinner duration
-    "day_context": "march",
-    "time_context": "dinner"
-}
-
-IMPORTANT: Return ONLY the JSON object, no comments or explanations. ALWAYS use exact dates from tool responses and EXACT durations from the rules above.
+   - For lunch/afternoon: start="12:00", end="14:00" (2 hours)
+   - For dinner/evening/night: start="19:00", end="21:00" (2 hours)
+   - For meetings: use 2 hour duration from specified start time
+4. Return ONLY the JSON object, no comments or explanations
 """
-        
-        # Initialize messages
-        self.messages = [
-            {'role': 'system', 'content': self.system_prompt}
-        ]
 
     def get_current_time(self) -> int:
         """Returns current Unix timestamp in seconds"""
@@ -159,28 +111,27 @@ IMPORTANT: Return ONLY the JSON object, no comments or explanations. ALWAYS use 
             'end_date': today.strftime('%Y-%m-%d')
         }
 
-    def get_next_week(self) -> Dict[str, str]:
-        """Returns dictionary with next week's dates (Monday to Sunday)"""
-        today = datetime.now()
-        # Calculate days until next Monday
-        days_until_monday = (0 - today.weekday()) % 7
-        if days_until_monday == 0:  # If today is Monday
-            days_until_monday = 7  # Go to next Monday
-        
-        next_monday = today + timedelta(days=days_until_monday)
-        next_sunday = next_monday + timedelta(days=6)  # Sunday is 6 days after Monday
-        
-        return {
-            'start_date': next_monday.strftime('%Y-%m-%d'),
-            'end_date': next_sunday.strftime('%Y-%m-%d')
-        }
-
     def get_tomorrow(self) -> Dict[str, str]:
         """Returns dictionary with tomorrow's date"""
         tomorrow = datetime.now() + timedelta(days=1)
         return {
             'start_date': tomorrow.strftime('%Y-%m-%d'),
             'end_date': tomorrow.strftime('%Y-%m-%d')
+        }
+
+    def get_next_week(self) -> Dict[str, str]:
+        """Returns dictionary with next week's dates (Monday to Sunday)"""
+        today = datetime.now()
+        days_until_monday = (0 - today.weekday()) % 7
+        if days_until_monday == 0:  # If today is Monday
+            days_until_monday = 7
+            
+        next_monday = today + timedelta(days=days_until_monday)
+        next_sunday = next_monday + timedelta(days=6)
+        
+        return {
+            'start_date': next_monday.strftime('%Y-%m-%d'),
+            'end_date': next_sunday.strftime('%Y-%m-%d')
         }
 
     def get_specific_day(self, day_name: str = None) -> Dict[str, str]:
@@ -214,314 +165,182 @@ IMPORTANT: Return ONLY the JSON object, no comments or explanations. ALWAYS use 
             days_ahead += 7
 
         target_date = today + timedelta(days=days_ahead)
-        return {
-            'start_date': target_date.strftime('%Y-%m-%d'),
-            'end_date': target_date.strftime('%Y-%m-%d')
-        }
-
-    def get_month_range(self, month_name: str = None) -> Dict[str, str]:
-        """Returns dictionary with start and end dates for a month"""
-        # Map month names to numbers (1-12)
-        month_map = {
-            'january': 1, 'jan': 1,
-            'february': 2, 'feb': 2,
-            'march': 3, 'mar': 3,
-            'april': 4, 'apr': 4,
-            'may': 5,
-            'june': 6, 'jun': 6,
-            'july': 7, 'jul': 7,
-            'august': 8, 'aug': 8,
-            'september': 9, 'sep': 9,
-            'october': 10, 'oct': 10,
-            'november': 11, 'nov': 11,
-            'december': 12, 'dec': 12
-        }
-
-        today = datetime.now()
+        target_date_str = target_date.strftime('%Y-%m-%d')
         
-        if not month_name:
-            # Use current month if no month specified
-            target_month = today.month
-            target_year = today.year
-        else:
-            # Clean up month name and handle potential JSON string
-            if isinstance(month_name, str):
-                try:
-                    # Try to parse as JSON in case it's a JSON string
-                    parsed = json.loads(month_name)
-                    if isinstance(parsed, dict) and 'month_name' in parsed:
-                        month_name = parsed['month_name']
-                except json.JSONDecodeError:
-                    pass
-            
-            # Get month number from name
-            month_name = str(month_name).lower().strip()
-            target_month = month_map.get(month_name)
-            
-            if target_month is None:
-                # Invalid month name, use current month
-                target_month = today.month
-                target_year = today.year
-            else:
-                target_year = today.year
-                # If the target month is earlier than current month, use next year
-                if target_month < today.month:
-                    target_year += 1
-
-        # Calculate first day of month
-        start_date = datetime(target_year, target_month, 1)
-        
-        # Calculate last day of month
-        if target_month == 12:
-            end_date = datetime(target_year + 1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = datetime(target_year, target_month + 1, 1) - timedelta(days=1)
-
         return {
-            'start_date': start_date.strftime('%Y-%m-%d'),
-            'end_date': end_date.strftime('%Y-%m-%d')
+            'start_date': target_date_str,
+            'end_date': target_date_str
         }
 
-    def enforce_meal_times(self, response_str: str) -> str:
+    def enforce_meal_times(self, datetime_info: Dict) -> Dict:
         """Enforces the standard meal times from MEAL_TIMES constant"""
         try:
-            response = json.loads(response_str)
-            time_context = response.get('time_context', '').lower()
+            time_context = datetime_info.get('time_context', '').lower()
+            
+            # Map general time contexts to meal times
+            if time_context in self.TIME_CONTEXT_MAP:
+                time_context = self.TIME_CONTEXT_MAP[time_context]
+                datetime_info['time_context'] = time_context
             
             if time_context in self.MEAL_TIMES:
                 if time_context == 'meeting':
                     # Handle meetings (2 hour duration)
-                    if response.get('start_time'):
-                        start_hour = int(response['start_time'].split(':')[0])
+                    if datetime_info.get('start_time'):
+                        start_hour = int(datetime_info['start_time'].split(':')[0])
                         end_hour = start_hour + self.MEAL_TIMES['meeting']['duration']
-                        response['end_time'] = f"{end_hour:02d}:00"
+                        datetime_info['end_time'] = f"{end_hour:02d}:00"
                 else:
                     # Handle meals
                     # If a specific start time is given, adjust end time to maintain duration
-                    if response.get('start_time'):
-                        start_hour = int(response['start_time'].split(':')[0])
+                    if datetime_info.get('start_time'):
+                        start_hour = int(datetime_info['start_time'].split(':')[0])
                         standard_duration = (
                             int(self.MEAL_TIMES[time_context]['end'].split(':')[0]) - 
                             int(self.MEAL_TIMES[time_context]['start'].split(':')[0])
                         )
                         end_hour = start_hour + standard_duration
-                        response['end_time'] = f"{end_hour:02d}:00"
+                        datetime_info['end_time'] = f"{end_hour:02d}:00"
                     else:
                         # Use standard times if no specific time given
-                        response['start_time'] = self.MEAL_TIMES[time_context]['start']
-                        response['end_time'] = self.MEAL_TIMES[time_context]['end']
+                        datetime_info['start_time'] = self.MEAL_TIMES[time_context]['start']
+                        datetime_info['end_time'] = self.MEAL_TIMES[time_context]['end']
             
-            return json.dumps(response, indent=4)
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"Error enforcing meal times: {str(e)}")
-            return response_str
+            return datetime_info
+        except Exception as e:
+            self.logger.error(f"Error enforcing meal times: {str(e)}")
+            return datetime_info
 
-    def process_query(self, query: str) -> Dict:
-        """Process a single query and return the datetime information"""
-        # Reset messages except system prompt
-        self.messages[1:] = [{'role': 'user', 'content': query}]
+    def get_month_dates(self, month_name: str) -> Dict[str, str]:
+        """Returns dictionary with start and end dates for a given month."""
+        current_date = datetime.now()
+        month_map = {
+            'january': 1, 'february': 2, 'march': 3, 'april': 4,
+            'may': 5, 'june': 6, 'july': 7, 'august': 8,
+            'september': 9, 'october': 10, 'november': 11, 'december': 12
+        }
+        
+        target_month = month_map[month_name.lower()]
+        target_year = current_date.year
+        
+        # If the target month is earlier than current month, use next year
+        if target_month < current_date.month:
+            target_year += 1
+            
+        # Get the last day of the month
+        if target_month == 12:
+            next_month = datetime(target_year + 1, 1, 1)
+        else:
+            next_month = datetime(target_year, target_month + 1, 1)
+        last_day = (next_month - timedelta(days=1)).day
+        
+        return {
+            'start_date': datetime(target_year, target_month, 1).strftime('%Y-%m-%d'),
+            'end_date': datetime(target_year, target_month, last_day).strftime('%Y-%m-%d')
+        }
 
-        # Ask Ollama to handle the query
-        response = self.client.chat(
-            'llama3.1',
-            messages=self.messages,
-            tools=[
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_current_time',
-                        'description': 'Returns current Unix timestamp (seconds since epoch) as an integer.',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {},
-                            'required': []
-                        }
-                    },
-                },
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_next_weekend',
-                        'description': 'Returns dictionary with next weekend dates (Saturday and Sunday).',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {},
-                            'required': []
-                        }
-                    },
-                },
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_this_weekend',
-                        'description': 'Returns dictionary with this weekend dates (Saturday and Sunday).',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {},
-                            'required': []
-                        }
-                    },
-                },
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_tonight',
-                        'description': 'Returns dictionary with tonight\'s date.',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {},
-                            'required': []
-                        }
-                    },
-                },
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_tomorrow',
-                        'description': 'Returns dictionary with tomorrow\'s date.',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {},
-                            'required': []
-                        }
-                    },
-                },
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_next_week',
-                        'description': 'Returns dictionary with next week\'s dates (Monday to Sunday).',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {},
-                            'required': []
-                        }
-                    },
-                },
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_specific_day',
-                        'description': 'Returns dictionary with date for a specific day.',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {
-                                'day_name': {
-                                    'type': 'string',
-                                    'description': 'The name of the day (e.g., "Monday", "Tuesday").'
-                                }
-                            },
-                            'required': ['day_name']
-                        }
-                    },
-                },
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': 'get_month_range',
-                        'description': 'Returns dictionary with start and end dates for a month.',
-                        'parameters': {
-                            'type': 'object',
-                            'properties': {
-                                'month_name': {
-                                    'type': 'string',
-                                    'description': 'The name of the month (e.g., "March", "April").'
-                                }
-                            },
-                            'required': ['month_name']
-                        }
-                    },
-                }
-            ],
-        )
-
-        result = {}
-        if response.message.tool_calls:
-            tool_outputs = []
-            for tool in response.message.tool_calls:
-                function_name = tool.function.name
-                function_to_call = self.available_functions.get(function_name)
+    async def process_query(self, query: str) -> Dict[str, Any]:
+        """Process a query to extract datetime information."""
+        try:
+            response = await self.openai_client.get_completion(
+                prompt=query,
+                system_prompt=self.system_prompt
+            )
+            
+            if not response:
+                logger.error("No response from OpenAI")
+                return self._get_empty_response()
                 
-                if function_to_call:
-                    try:
-                        # Parse arguments if they exist
-                        args = {}
-                        if hasattr(tool.function, 'arguments') and tool.function.arguments:
-                            try:
-                                # Parse arguments from string or dict
-                                if isinstance(tool.function.arguments, str):
-                                    parsed_args = json.loads(tool.function.arguments)
-                                else:
-                                    parsed_args = tool.function.arguments
-                                
-                                # Handle functions that require arguments
-                                if function_name == 'get_specific_day' and 'day_name' in parsed_args:
-                                    args = {'day_name': parsed_args['day_name']}
-                                elif function_name == 'get_month_range' and 'month_name' in parsed_args:
-                                    args = {'month_name': parsed_args['month_name']}
-                                
-                            except json.JSONDecodeError as e:
-                                print(f"Error parsing arguments for {function_name}: {str(e)}")
-                        
-                        # Call function with or without arguments
-                        output = function_to_call(**args) if args else function_to_call()
-                        tool_outputs.append({
-                            'output': output,
-                            'name': function_name
-                        })
-                    except Exception as e:
-                        print(f'Error calling {function_name}: {str(e)}')
-                        continue
+            # Get the day context
+            day_context = response.get("day_context", "").lower()
+            
+            # Fill in dates based on context
+            dates = {}
+            if "next weekend" in day_context:
+                dates = self.get_next_weekend()
+            elif "this weekend" in day_context:
+                dates = self.get_this_weekend()
+            elif "tonight" in day_context:
+                dates = self.get_tonight()
+            elif "tomorrow" in day_context:
+                dates = self.get_tomorrow()
+            elif "next week" in day_context:
+                dates = self.get_next_week()
+            elif any(day in day_context.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
+                # Extract the day name from context
+                for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+                    if day in day_context.lower():
+                        dates = self.get_specific_day(day)
+                        break
+            elif "this month" in day_context:
+                # Check if a specific month is mentioned in the query
+                months = ["january", "february", "march", "april", "may", "june", 
+                         "july", "august", "september", "october", "november", "december"]
+                for month in months:
+                    if month in query.lower():
+                        dates = self.get_month_dates(month)
+                        break
+            
+            # Create response with dates
+            response = {
+                "start_date": dates.get("start_date", response.get("start_date", "")),
+                "end_date": dates.get("end_date", response.get("end_date", "")),
+                "start_time": response.get("start_time", ""),
+                "end_time": response.get("end_time", ""),
+                "day_context": response.get("day_context", ""),
+                "time_context": response.get("time_context", "")
+            }
+            
+            # Enforce meal times
+            return self.enforce_meal_times(response)
+            
+        except Exception as e:
+            logger.error(f"Error processing datetime query: {e}")
+            return self._get_empty_response()
 
-            # Add tool outputs to messages
-            self.messages.append(response.message)
-            for tool_output in tool_outputs:
-                self.messages.append({
-                    'role': 'tool', 
-                    'content': str(tool_output['output']), 
-                    'name': tool_output['name']
-                })
-
-            # Final Ollama response
-            final_response = self.client.chat('llama3.1', messages=self.messages)
-            try:
-                # Try to parse the response as JSON first
-                json_response = json.loads(final_response.message.content)
-                # Enforce meal times
-                result = json.loads(self.enforce_meal_times(json.dumps(json_response)))
-            except json.JSONDecodeError:
-                result = {'error': 'Failed to parse response'}
-
-        return result
+    def _get_empty_response(self) -> Dict[str, str]:
+        """Return an empty datetime response with all fields."""
+        return {
+            "start_date": "",
+            "end_date": "",
+            "start_time": "",
+            "end_time": "",
+            "day_context": "",
+            "time_context": ""
+        }
 
 # Example usage
 if __name__ == '__main__':
-    try:
-        # Test the standalone function
-        import sys
-        if len(sys.argv) > 1:
-            query = ' '.join(sys.argv[1:])
+    async def test_queries():
+        try:
+            # Test the standalone function
+            import sys
             agent = DateTimeAgent()
-            result = agent.process_query(query)
-            print(json.dumps(result, indent=2))
-        else:
-            # Run the test suite if no query provided
-            agent = DateTimeAgent()
-            test_queries = [
-                "What date is next weekend?",
-                "Dinner tonight at 7pm",
-                "Lunch tomorrow at 1pm",
-                "Breakfast on Saturday at 9am",
-                "Breakfast on Thursday",
-                "Meeting next week at 3pm",
-                "Brunch this weekend at 11am",
-                "Dinner with friends tonight",
-                "Coffee tomorrow morning at 10:30",
-                "Dinner in March"
-            ]
-            for query in test_queries:
-                print("\nTesting query:", query)
-                result = agent.process_query(query)
+            
+            if len(sys.argv) > 1:
+                query = ' '.join(sys.argv[1:])
+                result = await agent.process_query(query)
                 print(json.dumps(result, indent=2))
-    except KeyboardInterrupt:
-        print('\nGoodbye!')
+            else:
+                # Run the test suite if no query provided
+                test_queries = [
+                    "What date is next weekend?",
+                    "Dinner tonight at 7pm",
+                    "Lunch tomorrow at 1pm",
+                    "Breakfast on Saturday at 9am",
+                    "Breakfast on Thursday",
+                    "Meeting next week at 3pm",
+                    "Brunch this weekend at 11am",
+                    "Dinner with friends tonight",
+                    "Coffee tomorrow morning at 10:30",
+                    "Dinner in March",
+                    "Italian restaurant near Soho with @family in February"
+                ]
+                for query in test_queries:
+                    print("\nTesting query:", query)
+                    result = await agent.process_query(query)
+                    print(json.dumps(result, indent=2))
+        except KeyboardInterrupt:
+            print('\nGoodbye!')
+            
+    # Run the async test function
+    asyncio.run(test_queries())
