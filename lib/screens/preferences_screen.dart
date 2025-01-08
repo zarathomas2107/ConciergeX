@@ -23,10 +23,13 @@ class PreferencesScreen extends StatefulWidget {
 class _PreferencesScreenState extends State<PreferencesScreen> {
   final _supabase = Supabase.instance.client;
   bool _loading = false;
+  String? _error;
   List<String> _availableCuisines = [];
   Map<String, bool> _dietaryRequirements = {};
-  Map<String, bool> _restaurantPreferences = {};
-  final List<String> _excludedCuisines = [];
+  List<String> _excludedCuisines = [];
+  List<String> _restaurantFeatures = [];
+  List<String> _selectedDietaryRequirements = [];
+  List<String> _selectedFeatures = [];
 
   // Add expansion state
   bool _isDietaryExpanded = false;
@@ -36,109 +39,175 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUserPreferences();
     _loadCuisineTypes();
+    _loadRestaurantFeatures();
     _loadDietaryRequirements();
-    _loadRestaurantPreferences();
     _excludedCuisines.addAll(
       List<String>.from(widget.initialPreferences['excluded_cuisines'] ?? [])
+    );
+    _selectedFeatures.addAll(
+      List<String>.from(widget.initialPreferences['restaurant_preferences'] ?? [])
+    );
+    _selectedDietaryRequirements.addAll(
+      List<String>.from(widget.initialPreferences['dietary_requirements'] ?? [])
     );
   }
 
   Future<void> _loadRestaurantPreferences() async {
+    setState(() => _loading = true);
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
       // Get all feature columns from restaurants_features table
-      final features = await _supabase
-          .rpc('get_distinct_restaurant_features');
-
-      print('Features from DB: $features'); // Debug log
-
-      // Get user's preferences
-      final userPrefs = await _supabase
-          .from('user_restaurant_preferences')
+      final featureFields = await _supabase
+          .from('restaurants_features')
           .select()
-          .eq('user_id', userId)
-          .maybeSingle();
+          .limit(1);  // We just need the structure, not the data
 
-      setState(() {
-        // Initialize preferences with features from database
-        _restaurantPreferences = Map.fromEntries(
-          (features as List).map<MapEntry<String, bool>>((feature) => 
-            MapEntry(feature['feature_name'] as String, feature['feature_value'] as bool)
-          )
-        );
+      if (mounted && featureFields.isNotEmpty) {
+        // Get all boolean columns except id and updated_at
+        final allFeatures = (featureFields[0] as Map<String, dynamic>)
+            .entries
+            .where((e) => e.key != 'id' && e.key != 'updated_at')
+            .map((e) => e.key.replaceAll('_', ' ').toTitleCase())  // Convert to display names
+            .toList();
 
-        // Update with user's selected preferences if they exist
-        if (userPrefs != null) {
-          for (var entry in (userPrefs as Map<String, dynamic>).entries) {
-            if (entry.key != 'user_id' && 
-                entry.key != 'created_at' && 
-                entry.key != 'updated_at' &&
-                _restaurantPreferences.containsKey(entry.key)) {
-              _restaurantPreferences[entry.key] = entry.value as bool;
-            }
-          }
-        }
-      });
-
-      print('Loaded ${_restaurantPreferences.length} restaurant preferences from database');
-      print('Preferences: $_restaurantPreferences'); // Debug log
+        setState(() {
+          _restaurantFeatures = allFeatures;
+          _loading = false;
+        });
+      }
     } catch (e) {
       print('Error loading restaurant preferences: $e');
       print('Error details: ${e.toString()}');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load restaurant preferences';
+          _loading = false;
+        });
+      }
     }
   }
 
-  Future<void> _saveRestaurantPreferences() async {
+  Future<void> _savePreferences() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return;
+      if (userId == null) {
+        print('Error: No user ID found');
+        return;
+      }
 
-      await _supabase
-          .from('user_restaurant_preferences')
-          .upsert({
-            'user_id': userId,
-            ..._restaurantPreferences,
-            'updated_at': DateTime.now().toIso8601String(),
-          });
+      print('Current user ID: $userId');
+      print('Saving restaurant preferences: $_selectedFeatures');
+      print('Saving dietary requirements: ${_dietaryRequirements.entries.where((e) => e.value).map((e) => e.key.replaceAll('_', ' ').toTitleCase()).toList()}');
+      print('Saving excluded cuisines: $_excludedCuisines');
+
+      // Get selected dietary requirements
+      final selectedDietaryRequirements = _dietaryRequirements.entries
+          .where((e) => e.value)
+          .map((e) => e.key.replaceAll('_', ' ').toTitleCase())
+          .toList();
+
+      final data = {
+        'dietary_requirements': selectedDietaryRequirements,
+        'restaurant_preferences': _selectedFeatures,
+        'excluded_cuisines': _excludedCuisines,
+      };
+
+      print('Saving data to profiles: $data');
+
+      // Update preferences in profiles table
+      final response = await _supabase
+          .from('profiles')
+          .update(data)
+          .eq('id', userId)
+          .select();
+
+      print('Supabase response: $response');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Preferences saved successfully')),
+        );
+      }
     } catch (e) {
-      print('Error saving restaurant preferences: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving restaurant preferences: $e')),
-      );
+      print('Error saving preferences: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save preferences'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _loadDietaryRequirements() async {
+    setState(() => _loading = true);
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Get the user's current dietary requirements
-      final response = await _supabase
-          .from('user_dietary_requirements')
+      print('Loading dietary requirements...');
+      // First get all possible dietary requirements from restaurants_dietary_compliance
+      final dietaryFields = await _supabase
+          .from('restaurants_dietary_compliance')
           .select()
-          .eq('user_id', userId)
-          .maybeSingle();
+          .limit(1);
 
-      setState(() {
-        _dietaryRequirements = {
-          'no_beef': response?['no_beef'] ?? false,
-          'no_pork': response?['no_pork'] ?? false,
-          'vegetarian': response?['vegetarian'] ?? false,
-          'vegan': response?['vegan'] ?? false,
-          'halal': response?['halal'] ?? false,
-          'kosher': response?['kosher'] ?? false,
-          'gluten_free': response?['gluten_free'] ?? false,
-          'dairy_free': response?['dairy_free'] ?? false,
-          'nut_allergy': response?['nut_allergy'] ?? false,
-          'shellfish_allergy': response?['shellfish_allergy'] ?? false,
-        };
-      });
+      print('Dietary fields response: $dietaryFields');
+
+      if (mounted && dietaryFields.isNotEmpty) {
+        // Get all boolean columns except id and updated_at
+        final allRequirements = (dietaryFields[0] as Map<String, dynamic>)
+            .entries
+            .where((e) => e.key != 'id' && e.key != 'updated_at')
+            .map((e) => e.key.replaceAll('_', ' ').toTitleCase())  // Convert to display names
+            .toList();
+
+        print('All requirements found: $allRequirements');
+        print('Current selected requirements: $_selectedDietaryRequirements');
+
+        setState(() {
+          // Initialize the map with all requirements set to false initially
+          _dietaryRequirements = Map.fromEntries(
+            allRequirements.map((req) => MapEntry(req, _selectedDietaryRequirements.contains(req)))
+          );
+          print('Initialized dietary requirements map: $_dietaryRequirements');
+          _loading = false;
+        });
+      } else {
+        print('No dietary fields found or response was empty');
+        // Fallback to hardcoded dietary requirements if no data is found
+        final fallbackRequirements = [
+          'Vegetarian',
+          'Vegan',
+          'Halal',
+          'Kosher',
+          'Gluten Free',
+          'Dairy Free',
+          'Nut Free',
+          'Shellfish Free'
+        ];
+        setState(() {
+          _dietaryRequirements = Map.fromEntries(
+            fallbackRequirements.map((req) => MapEntry(req, _selectedDietaryRequirements.contains(req)))
+          );
+          _loading = false;
+        });
+      }
     } catch (e) {
       print('Error loading dietary requirements: $e');
+      print('Error details: ${e.toString()}');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load dietary requirements';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -147,13 +216,19 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
+      // Get the selected requirements (where value is true)
+      final selectedRequirements = _dietaryRequirements.entries
+          .where((e) => e.value)
+          .map((e) => e.key)
+          .toList();
+
+      // Update requirements in profiles table
       await _supabase
-          .from('user_dietary_requirements')
-          .upsert({
-            'user_id': userId,
-            ..._dietaryRequirements,
-            'updated_at': DateTime.now().toIso8601String(),
-          });
+          .from('profiles')
+          .update({
+            'dietary_requirements': selectedRequirements,
+          })
+          .eq('id', userId);
     } catch (e) {
       print('Error saving dietary requirements: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -173,6 +248,76 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     } catch (e) {
       print('Error loading cuisine types: $e');
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadRestaurantFeatures() async {
+    setState(() => _loading = true);
+    try {
+      // Get all boolean columns from restaurants_features table
+      final response = await _supabase
+          .from('restaurants_features')
+          .select()
+          .limit(1);  // We just need the structure, not the data
+      
+      if (mounted && response.isNotEmpty) {
+        // Get all boolean columns except id and updated_at
+        final features = (response[0] as Map<String, dynamic>)
+            .entries
+            .where((e) => e.key != 'id' && e.key != 'updated_at')
+            .map((e) => e.key.replaceAll('_', ' ').toTitleCase())  // Convert to display names
+            .toList();
+        
+        setState(() {
+          _restaurantFeatures = features;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading restaurant features: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load restaurant features';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadUserPreferences() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final profile = await _supabase
+          .from('profiles')
+          .select('dietary_requirements, restaurant_preferences, excluded_cuisines')
+          .eq('id', userId)
+          .single();
+
+      if (mounted) {
+        setState(() {
+          // Handle dietary requirements
+          _selectedDietaryRequirements = List<String>.from(profile['dietary_requirements'] ?? []);
+
+          // Handle restaurant preferences
+          _selectedFeatures = List<String>.from(profile['restaurant_preferences'] ?? []);
+          print('Loaded restaurant preferences: $_selectedFeatures'); // Debug log
+
+          // Handle excluded cuisines
+          _excludedCuisines = List<String>.from(profile['excluded_cuisines'] ?? []);
+
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading user preferences: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load preferences';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -204,11 +349,18 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                         runSpacing: 8,
                         children: _dietaryRequirements.entries.map((entry) {
                           return FilterChip(
-                            label: Text(entry.key.replaceAll('_', ' ').toTitleCase()),
+                            label: Text(entry.key),
                             selected: entry.value,
                             onSelected: (selected) {
                               setState(() {
                                 _dietaryRequirements[entry.key] = selected;
+                                if (selected) {
+                                  if (!_selectedDietaryRequirements.contains(entry.key)) {
+                                    _selectedDietaryRequirements.add(entry.key);
+                                  }
+                                } else {
+                                  _selectedDietaryRequirements.remove(entry.key);
+                                }
                               });
                             },
                           );
@@ -231,14 +383,20 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: _restaurantPreferences.entries.map((entry) {
+                        children: _restaurantFeatures.map((feature) {
+                          final isSelected = _selectedFeatures.contains(feature);
                           return FilterChip(
-                            label: Text(entry.key.replaceAll('_', ' ').toTitleCase()),
-                            selected: entry.value,
+                            label: Text(feature),
+                            selected: isSelected,
                             onSelected: (selected) {
                               setState(() {
-                                _restaurantPreferences[entry.key] = selected;
+                                if (selected) {
+                                  _selectedFeatures.add(feature);
+                                } else {
+                                  _selectedFeatures.remove(feature);
+                                }
                               });
+                              print('Selected features: $_selectedFeatures'); // Debug log
                             },
                           );
                         }).toList(),
@@ -287,10 +445,11 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: ElevatedButton(
             onPressed: () async {
-              await _saveDietaryRequirements();
-              await _saveRestaurantPreferences();
+              await _savePreferences();
               widget.onPreferencesSaved({
                 'excluded_cuisines': _excludedCuisines,
+                'restaurant_preferences': _selectedFeatures,
+                'dietary_requirements': _selectedDietaryRequirements,
               });
             },
             child: const Text('Save Preferences'),
