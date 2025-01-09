@@ -69,25 +69,35 @@ class RestaurantCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.star, size: 16, color: Colors.amber),
-                      const SizedBox(width: 4),
-                      Text(
-                        restaurant.rating.toStringAsFixed(1),
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (restaurant.distance != null) ...[
+                  if (restaurant.address != null && restaurant.address!.isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined, size: 16),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            restaurant.address!,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
                         const SizedBox(width: 16),
-                        const Icon(Icons.location_on, size: 16),
+                        const Icon(Icons.star, size: 16, color: Colors.amber),
                         const SizedBox(width: 4),
                         Text(
-                          '${(restaurant.distance! / 1000).toStringAsFixed(1)}km',
+                          restaurant.rating.toStringAsFixed(1),
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
+                        if (restaurant.distance != null) ...[
+                          const SizedBox(width: 16),
+                          Text(
+                            '${(restaurant.distance! / 1000).toStringAsFixed(1)}km',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
                   if (restaurant.availableSlots?.isNotEmpty == true) ...[
                     const SizedBox(height: 8),
                     Text(
