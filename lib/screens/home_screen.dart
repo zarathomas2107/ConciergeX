@@ -15,13 +15,17 @@ class PreferencesSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('Building PreferencesSummary with preferences: $preferences');
+    
     final dietaryRequirements = preferences['dietary_requirements'] as List? ?? [];
     final excludedCuisines = preferences['excluded_cuisines'] as List? ?? [];
 
     if (dietaryRequirements.isEmpty && excludedCuisines.isEmpty) {
+      debugPrint('PreferencesSummary: No preferences to display');
       return const SizedBox.shrink();
     }
 
+    debugPrint('PreferencesSummary: Displaying preferences');
     return Card(
       margin: EdgeInsets.zero,
       shape: Border(
@@ -43,7 +47,7 @@ class PreferencesSummary extends StatelessWidget {
             ),
           ],
         ),
-        initiallyExpanded: true,
+        initiallyExpanded: false,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -162,22 +166,34 @@ class HomeScreenState extends State<HomeScreen> {
 
       final searchResponse = await restaurantService.searchWithAgent(query, userId);
       
+      debugPrint('Search Response Preferences: ${searchResponse.preferences}');
+      debugPrint('Search Response Group Preferences: ${searchResponse.groupPreferences}');
+      
+      Map<String, dynamic> preferences = {};
+      if (searchResponse.groupPreferences != null) {
+        preferences = {
+          'dietary_requirements': searchResponse.groupPreferences!['dietary_requirements'] ?? [],
+          'excluded_cuisines': searchResponse.groupPreferences!['excluded_cuisines'] ?? [],
+        };
+      }
+      
       _safeSetState(() {
         _filteredRestaurants = searchResponse.restaurants;
         _availableGroups = searchResponse.availableGroups;
         _showingGroups = searchResponse.showingGroups;
         _isSearching = false;
-        _currentPreferences = searchResponse.preferences ?? {};
+        _currentPreferences = preferences;
+        debugPrint('Current Preferences after setState: $_currentPreferences');
       });
 
       // Debug print
       if (!_showingGroups) {
         for (var restaurant in _filteredRestaurants) {
-          print('Restaurant: ${restaurant.name}, Distance: ${restaurant.distance}m');
+          debugPrint('Restaurant: ${restaurant.name}, Distance: ${restaurant.distance}m');
         }
       }
     } catch (e) {
-      print('Error filtering restaurants: $e');
+      debugPrint('Error filtering restaurants: $e');
       _safeSetState(() {
         _filteredRestaurants = [];
         _availableGroups = [];
