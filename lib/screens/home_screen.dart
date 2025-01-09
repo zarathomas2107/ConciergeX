@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/restaurant.dart';
 import '../widgets/restaurant_card.dart';
 import '../services/restaurant_service.dart';
@@ -127,20 +128,83 @@ class HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _availableGroups = [];
   bool _isSearching = false;
   bool _showingGroups = false;
+  bool _isLoadingLocation = true;
   Map<String, dynamic> _currentPreferences = {};
   final _supabase = Supabase.instance.client;
-
-  void _safeSetState(VoidCallback fn) {
-    if (mounted) {
-      setState(fn);
-    }
-  }
 
   @override
   void initState() {
     super.initState();
     _restaurants = widget.restaurants;
     _filteredRestaurants = _restaurants;
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isLoadingLocation = true);
+    
+    try {
+      // Check location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('Location permissions are denied');
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('Location permissions are permanently denied');
+        return;
+      }
+
+      // Get current position
+      final position = await Geolocator.getCurrentPosition();
+      debugPrint('Got user location: ${position.latitude}, ${position.longitude}');
+
+      // Create POINT text from coordinates
+      final pointText = 'POINT(${position.longitude} ${position.latitude})';
+      
+      // Get nearby restaurants
+      final restaurantsResponse = await _supabase
+          .rpc('get_restaurants_within_distance', params: {
+            'ref_point': pointText,
+            'max_distance': 5000.0,  // 5km radius
+            'excluded_cuisines': [],
+          });
+
+      if (mounted) {
+        setState(() {
+          _filteredRestaurants = (restaurantsResponse as List<dynamic>)
+              .map((data) => Restaurant.fromJson({
+                    'id': data['id'],
+                    'name': data['name'],
+                    'address': data['address'],
+                    'rating': data['rating'],
+                    'price_level': data['price_level'],
+                    'cuisine_type': data['cuisine_type'],
+                    'business_status': data['business_status'],
+                    'website': data['website'],
+                    'distance_meters': data['distance'],
+                    'latitude': data['latitude'],
+                    'longitude': data['longitude'],
+                  }))
+              .toList();
+          _isLoadingLocation = false;
+        });
+
+        debugPrint('Found ${_filteredRestaurants.length} nearby restaurants');
+      }
+    } catch (e) {
+      debugPrint('Error getting location or nearby restaurants: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingLocation = false;
+          _filteredRestaurants = _restaurants;
+        });
+      }
+    }
   }
 
   Future<void> filterRestaurants(String query) async {
@@ -213,6 +277,12 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -221,29 +291,40 @@ class HomeScreenState extends State<HomeScreen> {
           children: [
             PreferencesSummary(preferences: _currentPreferences),
             Expanded(
-              child: _isSearching 
-                ? const Center(child: CircularProgressIndicator())
-                : _showingGroups
-                  ? _availableGroups.isEmpty
-                    ? const Center(child: Text('No groups found'))
-                    : _buildGroupSuggestions()
-                  : _filteredRestaurants.isEmpty
-                    ? const Center(
-                        child: Text('No restaurants found. Try a different search.'),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        itemCount: _filteredRestaurants.length,
-                        itemBuilder: (context, index) {
-                          final restaurant = _filteredRestaurants[index];
-                          return RestaurantCard(
-                            restaurant: restaurant,
-                            onTap: () {
-                              // Handle restaurant selection
-                            },
-                          );
-                        },
-                      ),
+              child: _isLoadingLocation 
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Finding restaurants near you...'),
+                      ],
+                    ),
+                  )
+                : _isSearching 
+                  ? const Center(child: CircularProgressIndicator())
+                  : _showingGroups
+                    ? _availableGroups.isEmpty
+                      ? const Center(child: Text('No groups found'))
+                      : _buildGroupSuggestions()
+                    : _filteredRestaurants.isEmpty
+                      ? const Center(
+                          child: Text('No restaurants found. Try a different search.'),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          itemCount: _filteredRestaurants.length,
+                          itemBuilder: (context, index) {
+                            final restaurant = _filteredRestaurants[index];
+                            return RestaurantCard(
+                              restaurant: restaurant,
+                              onTap: () {
+                                // Handle restaurant selection
+                              },
+                            );
+                          },
+                        ),
             ),
           ],
         ),
