@@ -16,11 +16,12 @@ final MAPBOX_ACCESS_TOKEN = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
 // Public interface for HomeScreen state
 abstract class HomeScreenState extends State<HomeScreen> {
   void updateMap();
+  Future<void> filterRestaurants(String query);
 }
 
 class HomeScreen extends StatefulWidget {
-  final List<dynamic> restaurants;
-  final Function(List<dynamic>)? onRestaurantsUpdated;
+  final List<Restaurant> restaurants;
+  final Function(List<Restaurant>)? onRestaurantsUpdated;
 
   const HomeScreen({
     super.key, 
@@ -61,6 +62,19 @@ class _HomeScreenState extends HomeScreenState {
   Map<String, dynamic>? _groupPreferences;
   List<Map<String, dynamic>>? _groupSuggestions;
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  Future<void> filterRestaurants(String query) async {
+    setState(() {
+      _searchQuery = query;
+      _restaurants = widget.restaurants.where((restaurant) {
+        final name = restaurant.name.toLowerCase();
+        final searchLower = query.toLowerCase();
+        return name.contains(searchLower);
+      }).toList();
+    });
+    updateMap();
+  }
 
   @override
   void initState() {

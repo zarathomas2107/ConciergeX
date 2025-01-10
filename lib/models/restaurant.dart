@@ -16,16 +16,18 @@ class Restaurant {
 
   String get photoUrl {
     try {
-      print('Getting photo for restaurant: $id');
+      debugPrint('Getting photo for restaurant: $id');
       
-      final url = Supabase.instance.client.storage
-          .from('Photos/London_Restaurant_Photos')
-          .getPublicUrl('$id.jpg');
+      if (id.isEmpty) {
+        return 'https://picsum.photos/400/300';
+      }
       
-      print('Generated photo URL: $url');
+      final url = 'https://ryvqoavkltzagedrvymy.supabase.co/storage/v1/object/public/Photos/London_Restaurant_Photos/$id.jpg';
+      
+      debugPrint('Generated photo URL: $url');
       return url;
     } catch (e) {
-      print('Error getting photo URL for restaurant $id: $e');
+      debugPrint('Error getting photo URL for restaurant $id: $e');
       return 'https://picsum.photos/400/300';
     }
   }
@@ -44,18 +46,36 @@ class Restaurant {
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
-    var slotsJson = json['available_slots'] as List?;
+    debugPrint('Parsing restaurant data: $json');
+    List<AvailabilitySlot>? slots;
+    if (json['available_slots'] != null) {
+      try {
+        final slotsData = json['available_slots'];
+        if (slotsData is String) {
+          // Parse JSON string if needed
+          final List<dynamic> parsedSlots = jsonDecode(slotsData);
+          slots = parsedSlots.map((slot) => AvailabilitySlot.fromJson(slot)).toList();
+        } else if (slotsData is List) {
+          slots = slotsData.map((slot) => AvailabilitySlot.fromJson(slot)).toList();
+        }
+        debugPrint('Parsed ${slots?.length ?? 0} availability slots for restaurant ${json['name']}');
+      } catch (e) {
+        debugPrint('Error parsing availability slots: $e');
+        slots = null;
+      }
+    }
+
     return Restaurant(
-      id: json['RestaurantID']?.toString() ?? '',
-      name: json['Name']?.toString() ?? 'Unknown Restaurant',
-      cuisineType: json['CuisineType']?.toString() ?? 'Other',
-      rating: (json['Rating'] as num?)?.toDouble() ?? 0.0,
-      address: json['Address']?.toString(),
-      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
-      distance: json['distance'] != null ? (json['distance'] as num).toDouble() : null,
-      priceLevel: json['PriceLevel'] != null ? (json['PriceLevel'] as num).toInt() : null,
-      availableSlots: slotsJson?.map((slot) => AvailabilitySlot.fromJson(slot)).toList(),
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Unknown Restaurant',
+      cuisineType: json['cuisine_type']?.toString() ?? 'Unknown',
+      rating: (json['rating'] ?? 0.0).toDouble(),
+      address: json['address']?.toString(),
+      latitude: (json['latitude'] ?? 0.0).toDouble(),
+      longitude: (json['longitude'] ?? 0.0).toDouble(),
+      distance: json['distance_meters']?.toDouble(),
+      priceLevel: json['price_level']?.toInt(),
+      availableSlots: slots,
     );
   }
 
