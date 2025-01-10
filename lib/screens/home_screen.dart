@@ -79,18 +79,11 @@ class _HomeScreenState extends HomeScreenState {
 
   @override
   void dispose() {
-    // Clean up map resources
-    _circleAnnotationManager?.deleteAll().then((_) {
-      _circleAnnotationManager = null;
-    }).catchError((e) {
-      debugPrint('Error disposing circle annotation manager: $e');
-    });
-    _pointAnnotationManager?.deleteAll().then((_) {
-      _pointAnnotationManager = null;
-      _mapboxMap = null;
-    }).catchError((e) {
-      debugPrint('Error disposing map resources: $e');
-    });
+    _circleAnnotationManager?.deleteAll();
+    _pointAnnotationManager?.deleteAll();
+    _circleAnnotationManager = null;
+    _pointAnnotationManager = null;
+    _mapboxMap = null;
     _scrollController.dispose();
     super.dispose();
   }
@@ -122,27 +115,6 @@ class _HomeScreenState extends HomeScreenState {
         )
       );
       
-      // Add tap listener for markers
-      mapboxMap.annotations.createPointAnnotationManager().then((manager) {
-        manager.addOnPointAnnotationClickListener(
-          _PointAnnotationClickListener((annotation) {
-            final restaurant = _markerIdToRestaurant[annotation.id];
-            if (restaurant != null) {
-              // Find the index of the restaurant in the list
-              final index = _restaurants.indexWhere((r) => r.id == restaurant.id);
-              if (index != -1) {
-                // Scroll to the restaurant card
-                _scrollController.animateTo(
-                  index * 200.0, // Approximate height of each card
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeInOut,
-                );
-              }
-            }
-          })
-        );
-      });
-      
       debugPrint('Initial camera position set');
       setState(() {
         _showMap = true;
@@ -152,38 +124,17 @@ class _HomeScreenState extends HomeScreenState {
     }
   }
 
-  void _onStyleLoaded(StyleLoadedEventData event) {
+  void _onStyleLoaded(StyleLoadedEventData event) async {
     debugPrint("Style loaded event received");
-    if (!mounted) {
-      debugPrint("Widget not mounted, skipping map update");
+    if (!mounted || _mapboxMap == null) {
+      debugPrint("Widget not mounted or map not initialized, skipping map update");
       return;
     }
-    if (_mapboxMap == null) {
-      debugPrint("Map not initialized yet, skipping map update");
-      return;
+
+    // Update map if we have venue information
+    if (_venueName.isNotEmpty && _venueLat != 0.0 && _venueLon != 0.0) {
+      updateMap();
     }
-    
-    _mapboxMap!.style.getStyleURI().then((style) {
-      debugPrint("Current style after load: $style");
-      
-      // Create annotation manager after style is loaded
-      if (_pointAnnotationManager == null) {
-        debugPrint("Creating annotation manager after style load");
-        _mapboxMap!.annotations.createPointAnnotationManager().then((manager) {
-          setState(() {
-            _pointAnnotationManager = manager;
-          });
-          // Only update map if we have venue information
-          if (_venueName.isNotEmpty && _venueLat != 0.0 && _venueLon != 0.0) {
-            updateMap();
-          }
-        }).catchError((e) {
-          debugPrint('Error creating annotation manager: $e');
-        });
-      }
-    }).catchError((e) {
-      debugPrint("Error getting style URI: $e");
-    });
   }
 
   @override
@@ -196,37 +147,25 @@ class _HomeScreenState extends HomeScreenState {
     try {
       debugPrint('Starting map update with venue: $_venueName at $_venueLon, $_venueLat');
       
-      // Clear the marker-restaurant mapping
+      // Clear existing annotations and mapping
       _markerIdToRestaurant.clear();
-
-      // Create or clear circle annotation manager
-      if (_circleAnnotationManager == null) {
-        _circleAnnotationManager = await _mapboxMap!.annotations.createCircleAnnotationManager();
-      } else {
-        await _circleAnnotationManager!.deleteAll();
-      }
-
-      // Create or clear point annotation manager
-      if (_pointAnnotationManager == null) {
-        _pointAnnotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
-      } else {
-        await _pointAnnotationManager!.deleteAll();
-      }
-
-      // Set up click listener for the point annotation manager
-      _pointAnnotationManager!.addOnPointAnnotationClickListener(
+      
+      // Create new annotation managers
+      _circleAnnotationManager = await _mapboxMap!.annotations.createCircleAnnotationManager();
+      _pointAnnotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
+      
+      // Set up click listener
+      _pointAnnotationManager?.addOnPointAnnotationClickListener(
         _PointAnnotationClickListener((annotation) {
           debugPrint('Marker clicked: ${annotation.id}');
           final restaurant = _markerIdToRestaurant[annotation.id];
           if (restaurant != null) {
             debugPrint('Found restaurant: ${restaurant.name}');
-            // Find the index of the restaurant in the list
             final index = _restaurants.indexWhere((r) => r.id == restaurant.id);
             if (index != -1) {
               debugPrint('Scrolling to index: $index');
-              // Scroll to the restaurant card
               _scrollController.animateTo(
-                index * 200.0, // Approximate height of each card
+                index * 130.0,
                 duration: const Duration(milliseconds: 500),
                 curve: Curves.easeInOut,
               );
@@ -444,18 +383,24 @@ class _HomeScreenState extends HomeScreenState {
     return Column(
       children: [
         if (_showMap)
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.25,
-            child: MapWidget(
-              key: const ValueKey("mapWidget"),
-              onMapCreated: _onMapCreated,
-              onStyleLoadedListener: _onStyleLoaded,
-              styleUri: "mapbox://styles/mapbox/streets-v12",
-              cameraOptions: CameraOptions(
-                center: Point(
-                  coordinates: Position(-0.1276474, 51.5073219)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.2,
+                child: MapWidget(
+                  key: const ValueKey("mapWidget"),
+                  onMapCreated: _onMapCreated,
+                  onStyleLoadedListener: _onStyleLoaded,
+                  styleUri: "mapbox://styles/mapbox/streets-v12",
+                  cameraOptions: CameraOptions(
+                    center: Point(
+                      coordinates: Position(-0.1276474, 51.5073219)
+                    ),
+                    zoom: 12.0,
+                  ),
                 ),
-                zoom: 12.0,
               ),
             ),
           ),
