@@ -14,11 +14,18 @@ class RestaurantCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('Building RestaurantCard for: ${restaurant.name}');
+    debugPrint('Available slots: ${restaurant.availableSlots?.length ?? 0}');
+    if (restaurant.availableSlots?.isNotEmpty == true) {
+      debugPrint('First available slot: ${restaurant.availableSlots!.first.date} at ${restaurant.availableSlots!.first.formatTimeSlot()}');
+    }
+    
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: const EdgeInsets.all(8.0),
       child: InkWell(
         onTap: () {
+          debugPrint('Opening availability dialog for: ${restaurant.name}');
           showDialog(
             context: context,
             builder: (context) => AvailabilityDialog(restaurant: restaurant),
@@ -100,11 +107,21 @@ class RestaurantCard extends StatelessWidget {
                     ),
                   if (restaurant.availableSlots?.isNotEmpty == true) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      'Available',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.event_available,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${restaurant.availableSlots!.length} slots available',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                      ],
                     ),
                   ],
                 ],

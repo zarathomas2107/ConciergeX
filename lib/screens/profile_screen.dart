@@ -155,7 +155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     
     return Container(
-      padding: const EdgeInsets.only(top: 60, bottom: 20),
+      padding: const EdgeInsets.only(top: 16, bottom: 16),
       child: Center(
         child: Stack(
           children: [
@@ -452,103 +452,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.black,
-        toolbarHeight: 0,
-        elevation: 0,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _profile == null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('No profile found'),
-                      ElevatedButton(
-                        onPressed: _loadProfile,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    _buildProfileHeader(),
-                    const SizedBox(height: 20),
-                    const Divider(),
-                    const SizedBox(height: 20),
-                    ListTile(
-                      title: const Text('Email'),
-                      subtitle: Text(_profile?['email'] ?? 'Not set'),
-                      leading: Icon(Icons.email, size: 26.4, color: Colors.white),
-                    ),
-                    const SizedBox(height: 16),
-                    ListTile(
-                      title: const Text('Preferences'),
-                      subtitle: const Text('Manage your dietary and location preferences'),
-                      leading: Icon(Icons.favorite, size: 26.4, color: Colors.white),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PreferencesScreen(
-                            isUserPreferences: true,
-                            initialPreferences: {
-                              'dietary_requirements': _profile?['dietary_requirements'] ?? [],
-                              'restaurant_preferences': _profile?['restaurant_preferences'] ?? [],
-                              'excluded_cuisines': _profile?['excluded_cuisines'] ?? [],
-                            },
-                            onPreferencesSaved: (preferences) async {
-                              try {
-                                // Update the profile with new preferences
-                                final userId = _supabase.auth.currentUser?.id;
-                                if (userId != null) {
-                                  final response = await _supabase
-                                      .from('profiles')
-                                      .update({
-                                        'dietary_requirements': preferences['dietary_requirements'],
-                                        'restaurant_preferences': preferences['restaurant_preferences'],
-                                        'excluded_cuisines': preferences['excluded_cuisines'],
-                                        'updated_at': DateTime.now().toIso8601String(),
-                                      })
-                                      .eq('id', userId)
-                                      .select()
-                                      .single();
-                                  
-                                  setState(() {
-                                    _profile = response;
-                                  });
-                                }
-                                Navigator.pop(context);
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error saving preferences: $e')),
-                                );
-                              }
-                            },
-                          ),
+          : ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _buildProfileHeader(),
+                ListTile(
+                  leading: const Icon(Icons.settings),
+                  title: const Text('Preferences'),
+                  subtitle: const Text('Manage your dining preferences and groups'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PreferencesScreen(
+                          isUserPreferences: true,
+                          initialPreferences: {
+                            'dietary_requirements': _dietaryRequirements.keys.where((k) => _dietaryRequirements[k] ?? false).toList(),
+                            'restaurant_preferences': _restaurantPreferences.keys.where((k) => _restaurantPreferences[k] ?? false).toList(),
+                            'excluded_cuisines': _excludedCuisines.toList(),
+                          },
+                          onPreferencesSaved: (prefs) {
+                            setState(() {
+                              _dietaryRequirements = Map.fromIterable(
+                                prefs['dietary_requirements'] as List,
+                                key: (item) => item as String,
+                                value: (item) => true,
+                              );
+                              _restaurantPreferences = Map.fromIterable(
+                                prefs['restaurant_preferences'] as List,
+                                key: (item) => item as String,
+                                value: (item) => true,
+                              );
+                              _excludedCuisines = Set.from(prefs['excluded_cuisines'] as List);
+                            });
+                          },
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    ListTile(
-                      title: const Text('Groups'),
-                      subtitle: const Text('Manage your groups and preferences'),
-                      leading: Icon(Icons.group, size: 26.4, color: Colors.white),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const GroupsScreen(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ListTile(
-                      title: const Text('Logout'),
-                      leading: Icon(Icons.logout, size: 26.4, color: Colors.white),
-                      onTap: _handleLogout,
-                    ),
-                  ],
+                    );
+                  },
                 ),
+                ListTile(
+                  title: const Text('Email'),
+                  subtitle: Text(_profile?['email'] ?? 'Not set'),
+                  leading: Icon(Icons.email, size: 26.4, color: Colors.white),
+                ),
+                ListTile(
+                  title: const Text('Groups'),
+                  subtitle: const Text('Manage your groups and preferences'),
+                  leading: Icon(Icons.group, size: 26.4, color: Colors.white),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const GroupsScreen(),
+                    ),
+                  ),
+                ),
+                ListTile(
+                  title: const Text('Logout'),
+                  leading: Icon(Icons.logout, size: 26.4, color: Colors.white),
+                  onTap: _handleLogout,
+                ),
+              ],
+            ),
     );
   }
 }
