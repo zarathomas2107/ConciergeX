@@ -1,352 +1,536 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import '../config/mapbox_config.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:geolocator/geolocator.dart';
-import '../models/restaurant.dart';
-import '../widgets/restaurant_card.dart';
 import '../services/restaurant_service.dart';
-import 'dart:math';
+import '../widgets/restaurant_card.dart';
+import '../models/restaurant.dart';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-class PreferencesSummary extends StatelessWidget {
-  final Map<String, dynamic> preferences;
+final MAPBOX_ACCESS_TOKEN = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
 
-  const PreferencesSummary({
-    Key? key,
-    required this.preferences,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    debugPrint('Building PreferencesSummary with preferences: $preferences');
-    
-    final dietaryRequirements = preferences['dietary_requirements'] as List? ?? [];
-    final excludedCuisines = preferences['excluded_cuisines'] as List? ?? [];
-
-    if (dietaryRequirements.isEmpty && excludedCuisines.isEmpty) {
-      debugPrint('PreferencesSummary: No preferences to display');
-      return const SizedBox.shrink();
-    }
-
-    debugPrint('PreferencesSummary: Displaying preferences');
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: Border(
-        bottom: BorderSide(
-          color: Colors.grey.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: ExpansionTile(
-        title: Row(
-          children: [
-            const Icon(Icons.filter_list, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              'Group Preferences',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        initiallyExpanded: false,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (dietaryRequirements.isNotEmpty) ...[
-                  Text(
-                    'Dietary Requirements:',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: dietaryRequirements.map((req) => Chip(
-                      label: Text(
-                        req.toString().replaceAll('_', ' '),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      backgroundColor: Colors.green.withOpacity(0.1),
-                      side: BorderSide.none,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    )).toList(),
-                  ),
-                ],
-                if (excludedCuisines.isNotEmpty) ...[
-                  if (dietaryRequirements.isNotEmpty)
-                    const SizedBox(height: 8),
-                  Text(
-                    'Excluded Cuisines:',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: excludedCuisines.map((cuisine) => Chip(
-                      label: Text(
-                        cuisine.toString(),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      backgroundColor: Colors.red.withOpacity(0.1),
-                      side: BorderSide.none,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    )).toList(),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+// Public interface for HomeScreen state
+abstract class HomeScreenState extends State<HomeScreen> {
+  void updateMap();
 }
 
 class HomeScreen extends StatefulWidget {
-  final List<Restaurant> restaurants;
-  final Function(List<Restaurant>) onRestaurantsUpdated;
+  final List<dynamic> restaurants;
+  final Function(List<dynamic>)? onRestaurantsUpdated;
 
   const HomeScreen({
-    Key? key,
-    required this.restaurants,
-    required this.onRestaurantsUpdated,
-  }) : super(key: key);
+    super.key, 
+    this.restaurants = const [], 
+    this.onRestaurantsUpdated,
+  });
 
   @override
-  HomeScreenState createState() => HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class HomeScreenState extends State<HomeScreen> {
-  List<Restaurant> _restaurants = [];
-  List<Restaurant> _filteredRestaurants = [];
-  List<Map<String, dynamic>> _availableGroups = [];
-  bool _isSearching = false;
-  bool _showingGroups = false;
-  bool _isLoadingLocation = true;
-  Map<String, dynamic> _currentPreferences = {};
-  final _supabase = Supabase.instance.client;
+class _PointAnnotationClickListener extends OnPointAnnotationClickListener {
+  final Function(PointAnnotation) onClick;
+
+  _PointAnnotationClickListener(this.onClick);
+
+  @override
+  void onPointAnnotationClick(PointAnnotation annotation) {
+    onClick(annotation);
+  }
+}
+
+class _HomeScreenState extends HomeScreenState {
+  MapboxMap? _mapboxMap;
+  PointAnnotationManager? _pointAnnotationManager;
+  CircleAnnotationManager? _circleAnnotationManager;
+  final ScrollController _scrollController = ScrollController();
+  List<dynamic> _restaurants = [];
+  bool _isLoading = false;
+  String _searchQuery = '';
+  geo.Position? _currentPosition;
+  bool _showMap = false;
+  late final double _devicePixelRatio;
+  String _venueName = '';
+  double _venueLat = 0.0;
+  double _venueLon = 0.0;
+  Map<String, Restaurant> _markerIdToRestaurant = {};
 
   @override
   void initState() {
     super.initState();
-    _restaurants = widget.restaurants;
-    _filteredRestaurants = _restaurants;
-    _getCurrentLocation();
+    _devicePixelRatio = PlatformDispatcher.instance.views.first.devicePixelRatio;
+    _restaurants = List.from(widget.restaurants);
+    _initializeLocation();
   }
 
-  Future<void> _getCurrentLocation() async {
-    setState(() => _isLoadingLocation = true);
-    
-    try {
-      // Check location permission
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          debugPrint('Location permissions are denied');
-          return;
-        }
-      }
-      
-      if (permission == LocationPermission.deniedForever) {
-        debugPrint('Location permissions are permanently denied');
-        return;
-      }
-
-      // Get current position
-      final position = await Geolocator.getCurrentPosition();
-      debugPrint('Got user location: ${position.latitude}, ${position.longitude}');
-
-      // Create POINT text from coordinates
-      final pointText = 'POINT(${position.longitude} ${position.latitude})';
-      
-      // Get nearby restaurants
-      final restaurantsResponse = await _supabase
-          .rpc('get_restaurants_within_distance', params: {
-            'ref_point': pointText,
-            'max_distance': 5000.0,  // 5km radius
-            'excluded_cuisines': [],
-          });
-
-      if (mounted) {
-        setState(() {
-          _filteredRestaurants = (restaurantsResponse as List<dynamic>)
-              .map((data) => Restaurant.fromJson({
-                    'id': data['id'],
-                    'name': data['name'],
-                    'address': data['address'],
-                    'rating': data['rating'],
-                    'price_level': data['price_level'],
-                    'cuisine_type': data['cuisine_type'],
-                    'business_status': data['business_status'],
-                    'website': data['website'],
-                    'distance_meters': data['distance'],
-                    'latitude': data['latitude'],
-                    'longitude': data['longitude'],
-                  }))
-              .toList();
-          _isLoadingLocation = false;
-        });
-
-        debugPrint('Found ${_filteredRestaurants.length} nearby restaurants');
-      }
-    } catch (e) {
-      debugPrint('Error getting location or nearby restaurants: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingLocation = false;
-          _filteredRestaurants = _restaurants;
-        });
-      }
-    }
-  }
-
-  Future<void> filterRestaurants(String query) async {
-    if (query.isEmpty) {
-      _safeSetState(() {
-        _filteredRestaurants = _restaurants;
-        _availableGroups = [];
-        _showingGroups = false;
-        _isSearching = false;
-        _currentPreferences = {};
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.restaurants != oldWidget.restaurants) {
+      setState(() {
+        _restaurants = List.from(widget.restaurants);
       });
-      return;
-    }
-
-    _safeSetState(() => _isSearching = true);
-
-    try {
-      final restaurantService = RestaurantService();
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      final searchResponse = await restaurantService.searchWithAgent(query, userId);
-      
-      debugPrint('Search Response Preferences: ${searchResponse.preferences}');
-      debugPrint('Search Response Group Preferences: ${searchResponse.groupPreferences}');
-      
-      Map<String, dynamic> preferences = {};
-      if (searchResponse.groupPreferences != null) {
-        preferences = {
-          'dietary_requirements': searchResponse.groupPreferences!['dietary_requirements'] ?? [],
-          'excluded_cuisines': searchResponse.groupPreferences!['excluded_cuisines'] ?? [],
-        };
-      }
-      
-      _safeSetState(() {
-        _filteredRestaurants = searchResponse.restaurants;
-        _availableGroups = searchResponse.availableGroups;
-        _showingGroups = searchResponse.showingGroups;
-        _isSearching = false;
-        _currentPreferences = preferences;
-        debugPrint('Current Preferences after setState: $_currentPreferences');
-      });
-
-      // Debug print
-      if (!_showingGroups) {
-        for (var restaurant in _filteredRestaurants) {
-          debugPrint('Restaurant: ${restaurant.name}, Distance: ${restaurant.distance}m');
-        }
-      }
-    } catch (e) {
-      debugPrint('Error filtering restaurants: $e');
-      _safeSetState(() {
-        _filteredRestaurants = [];
-        _availableGroups = [];
-        _showingGroups = false;
-        _isSearching = false;
-        _currentPreferences = {};
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _safeSetState(VoidCallback fn) {
-    if (mounted) {
-      setState(fn);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            PreferencesSummary(preferences: _currentPreferences),
-            Expanded(
-              child: _isLoadingLocation 
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Finding restaurants near you...'),
-                      ],
-                    ),
-                  )
-                : _isSearching 
-                  ? const Center(child: CircularProgressIndicator())
-                  : _showingGroups
-                    ? _availableGroups.isEmpty
-                      ? const Center(child: Text('No groups found'))
-                      : _buildGroupSuggestions()
-                    : _filteredRestaurants.isEmpty
-                      ? const Center(
-                          child: Text('No restaurants found. Try a different search.'),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          itemCount: _filteredRestaurants.length,
-                          itemBuilder: (context, index) {
-                            final restaurant = _filteredRestaurants[index];
-                            return RestaurantCard(
-                              restaurant: restaurant,
-                              onTap: () {
-                                // Handle restaurant selection
-                              },
-                            );
-                          },
-                        ),
-            ),
-          ],
-        ),
-      ),
-    );
+  void dispose() {
+    // Clean up map resources
+    _circleAnnotationManager?.deleteAll().then((_) {
+      _circleAnnotationManager = null;
+    }).catchError((e) {
+      debugPrint('Error disposing circle annotation manager: $e');
+    });
+    _pointAnnotationManager?.deleteAll().then((_) {
+      _pointAnnotationManager = null;
+      _mapboxMap = null;
+    }).catchError((e) {
+      debugPrint('Error disposing map resources: $e');
+    });
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  Widget _buildGroupSuggestions() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _availableGroups.length,
-      itemBuilder: (context, index) {
-        final group = _availableGroups[index];
-        return ListTile(
-          leading: const Icon(Icons.group),
-          title: Text(group['name'] ?? 'Unnamed Group'),
-          onTap: () {
-            // When a group is selected, update the search query with the group name
-            // You'll need to implement this callback
-          },
+  Future<void> _initializeLocation() async {
+    try {
+      final position = await geo.Geolocator.getCurrentPosition();
+      setState(() {
+        _currentPosition = position;
+      });
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+    }
+  }
+
+  void _onMapCreated(MapboxMap mapboxMap) async {
+    debugPrint('Map creation started');
+    _mapboxMap = mapboxMap;
+    
+    try {
+      debugPrint('Using Mapbox token: ${MAPBOX_ACCESS_TOKEN.substring(0, 10)}...');
+      debugPrint('Setting initial camera position...');
+      await mapboxMap.setCamera(
+        CameraOptions(
+          center: Point(
+            coordinates: Position(-0.1276474, 51.5073219)
+          ),
+          zoom: 12.0,
+        )
+      );
+      
+      // Add tap listener for markers
+      mapboxMap.annotations.createPointAnnotationManager().then((manager) {
+        manager.addOnPointAnnotationClickListener(
+          _PointAnnotationClickListener((annotation) {
+            final restaurant = _markerIdToRestaurant[annotation.id];
+            if (restaurant != null) {
+              // Find the index of the restaurant in the list
+              final index = _restaurants.indexWhere((r) => r.id == restaurant.id);
+              if (index != -1) {
+                // Scroll to the restaurant card
+                _scrollController.animateTo(
+                  index * 200.0, // Approximate height of each card
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                );
+              }
+            }
+          })
         );
-      },
+      });
+      
+      debugPrint('Initial camera position set');
+      setState(() {
+        _showMap = true;
+      });
+    } catch (e) {
+      debugPrint('Error initializing map: $e');
+    }
+  }
+
+  void _onStyleLoaded(StyleLoadedEventData event) {
+    debugPrint("Style loaded event received");
+    if (!mounted) {
+      debugPrint("Widget not mounted, skipping map update");
+      return;
+    }
+    if (_mapboxMap == null) {
+      debugPrint("Map not initialized yet, skipping map update");
+      return;
+    }
+    
+    _mapboxMap!.style.getStyleURI().then((style) {
+      debugPrint("Current style after load: $style");
+      
+      // Create annotation manager after style is loaded
+      if (_pointAnnotationManager == null) {
+        debugPrint("Creating annotation manager after style load");
+        _mapboxMap!.annotations.createPointAnnotationManager().then((manager) {
+          setState(() {
+            _pointAnnotationManager = manager;
+          });
+          // Only update map if we have venue information
+          if (_venueName.isNotEmpty && _venueLat != 0.0 && _venueLon != 0.0) {
+            updateMap();
+          }
+        }).catchError((e) {
+          debugPrint('Error creating annotation manager: $e');
+        });
+      }
+    }).catchError((e) {
+      debugPrint("Error getting style URI: $e");
+    });
+  }
+
+  @override
+  void updateMap() async {
+    if (_mapboxMap == null) {
+      debugPrint('Map not initialized');
+      return;
+    }
+
+    try {
+      debugPrint('Starting map update with venue: $_venueName at $_venueLon, $_venueLat');
+      
+      // Clear the marker-restaurant mapping
+      _markerIdToRestaurant.clear();
+
+      // Create or clear circle annotation manager
+      if (_circleAnnotationManager == null) {
+        _circleAnnotationManager = await _mapboxMap!.annotations.createCircleAnnotationManager();
+      } else {
+        await _circleAnnotationManager!.deleteAll();
+      }
+
+      // Create or clear point annotation manager
+      if (_pointAnnotationManager == null) {
+        _pointAnnotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
+      } else {
+        await _pointAnnotationManager!.deleteAll();
+      }
+
+      // Set up click listener for the point annotation manager
+      _pointAnnotationManager!.addOnPointAnnotationClickListener(
+        _PointAnnotationClickListener((annotation) {
+          debugPrint('Marker clicked: ${annotation.id}');
+          final restaurant = _markerIdToRestaurant[annotation.id];
+          if (restaurant != null) {
+            debugPrint('Found restaurant: ${restaurant.name}');
+            // Find the index of the restaurant in the list
+            final index = _restaurants.indexWhere((r) => r.id == restaurant.id);
+            if (index != -1) {
+              debugPrint('Scrolling to index: $index');
+              // Scroll to the restaurant card
+              _scrollController.animateTo(
+                index * 200.0, // Approximate height of each card
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+              );
+            }
+          }
+        })
+      );
+
+      // Add venue marker if we have venue information
+      if (_venueName.isNotEmpty && _venueLat != 0.0 && _venueLon != 0.0) {
+        debugPrint('Adding venue marker...');
+        
+        // Add circle marker for the venue location
+        await _circleAnnotationManager!.create(
+          CircleAnnotationOptions(
+            geometry: Point(
+              coordinates: Position(_venueLon, _venueLat)
+            ),
+            circleColor: Colors.red.value,
+            circleRadius: 15.0,
+            circleStrokeWidth: 3.0,
+            circleStrokeColor: Colors.white.value,
+          ),
+        );
+        debugPrint('Added circle marker');
+
+        // Add text annotation for the venue name
+        await _pointAnnotationManager!.create(
+          PointAnnotationOptions(
+            geometry: Point(
+              coordinates: Position(_venueLon, _venueLat)
+            ),
+            textField: _venueName,
+            textSize: 14.0,
+            textOffset: [0, 3.0],
+            textColor: Colors.black.value,
+            textHaloColor: Colors.white.value,
+            textHaloWidth: 3.0,
+          ),
+        );
+        debugPrint('Added text annotation');
+        
+        // Add top 10 restaurants
+        final top10Restaurants = _restaurants.take(10).toList();
+        for (var restaurant in top10Restaurants) {
+          if (restaurant.latitude != null && restaurant.longitude != null) {
+            // Add circle marker for restaurant
+            final circle = await _circleAnnotationManager!.create(
+              CircleAnnotationOptions(
+                geometry: Point(
+                  coordinates: Position(restaurant.longitude, restaurant.latitude)
+                ),
+                circleColor: Colors.blue.value,
+                circleRadius: 10.0,
+                circleStrokeWidth: 2.0,
+                circleStrokeColor: Colors.white.value,
+              ),
+            );
+
+            // Add text annotation for restaurant name and store the mapping
+            final point = await _pointAnnotationManager!.create(
+              PointAnnotationOptions(
+                geometry: Point(
+                  coordinates: Position(restaurant.longitude, restaurant.latitude)
+                ),
+                textField: '${restaurant.name} (${restaurant.rating}★)',
+                textSize: 12.0,
+                textOffset: [0, 2.0],
+                textColor: Colors.black.value,
+                textHaloColor: Colors.white.value,
+                textHaloWidth: 2.0,
+              ),
+            );
+            
+            // Store the mapping between marker and restaurant
+            _markerIdToRestaurant[point.id] = restaurant;
+          }
+        }
+        
+        debugPrint('Added marker for venue: $_venueName at $_venueLon, $_venueLat');
+        
+        // Center map on the venue location with animation
+        await _mapboxMap!.flyTo(
+          CameraOptions(
+            center: Point(
+              coordinates: Position(_venueLon, _venueLat)
+            ),
+            zoom: 14.0,
+          ),
+          MapAnimationOptions(duration: 1000),
+        );
+        debugPrint('Centered map on venue: $_venueName');
+      } else {
+        debugPrint('No venue information available');
+      }
+    } catch (e) {
+      debugPrint('Error updating map: $e');
+    }
+  }
+
+  double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    var p = 0.017453292519943295;  // Math.PI / 180
+    var c = math.cos;
+    var a = 0.5 - c((lat2 - lat1) * p)/2 + 
+            c(lat1 * p) * c(lat2 * p) * 
+            (1 - c((lon2 - lon1) * p))/2;
+    return 12742 * math.asin(math.sqrt(a)) * 1000; // 2 * R * asin(sqrt(a)) where R = 6371 km, result in meters
+  }
+
+  void _onScroll() {
+    // Remove map update on scroll
+    // updateMap();
+  }
+
+  Future<void> _handleSearch(String query) async {
+    setState(() {
+      _isLoading = true;
+      _searchQuery = query;
+    });
+
+    try {
+      final restaurantService = RestaurantService();
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      
+      if (userId != null) {
+        final response = await restaurantService.searchWithAgent(query, userId);
+        debugPrint('Got search response: ${response.preferences}');
+        
+        if (mounted) {
+          // Sort restaurants by distance
+          final restaurants = response.restaurants;
+          restaurants.sort((a, b) {
+            final distanceA = a.distance ?? double.infinity;
+            final distanceB = b.distance ?? double.infinity;
+            return distanceA.compareTo(distanceB);
+          });
+
+          // Parse venue information
+          String venueName = '';
+          double venueLat = 0.0;
+          double venueLon = 0.0;
+
+          // Get location data from the response
+          if (response.location != null) {
+            debugPrint('Location found in response: ${response.location}');
+            venueName = response.location!['name']?.toString() ?? '';
+            
+            // Get coordinates from points_of_interest table
+            if (venueName.isNotEmpty) {
+              try {
+                final venueData = await Supabase.instance.client
+                    .from('points_of_interest')
+                    .select('latitude, longitude')
+                    .eq('name', venueName)
+                    .single();
+                
+                if (venueData != null) {
+                  venueLat = venueData['latitude'] as double;
+                  venueLon = venueData['longitude'] as double;
+                  debugPrint('Found venue coordinates: $venueLon, $venueLat');
+                }
+              } catch (e) {
+                debugPrint('Error getting venue coordinates: $e');
+              }
+            }
+          } else {
+            debugPrint('No location found in response');
+          }
+
+          setState(() {
+            _restaurants = restaurants;
+            _showMap = true;
+            _isLoading = false;
+            _venueName = venueName;
+            _venueLat = venueLat;
+            _venueLon = venueLon;
+          });
+          
+          debugPrint('Before updateMap: venue=$_venueName, lat=$_venueLat, lon=$_venueLon');
+          updateMap();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error searching restaurants: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error searching restaurants: $e')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  double _hexToDouble(String hex) {
+    // Convert hex string to int
+    int value = int.parse(hex, radix: 16);
+    // Convert int to bytes
+    List<int> bytes = [];
+    for (int i = 0; i < 8; i++) {
+      bytes.add((value >> (i * 8)) & 0xFF);
+    }
+    // Create a ByteData view
+    ByteData data = ByteData(8);
+    for (int i = 0; i < 8; i++) {
+      data.setUint8(i, bytes[i]);
+    }
+    // Read as double
+    return data.getFloat64(0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (_showMap)
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.25,
+            child: MapWidget(
+              key: const ValueKey("mapWidget"),
+              onMapCreated: _onMapCreated,
+              onStyleLoadedListener: _onStyleLoaded,
+              styleUri: "mapbox://styles/mapbox/streets-v12",
+              cameraOptions: CameraOptions(
+                center: Point(
+                  coordinates: Position(-0.1276474, 51.5073219)
+                ),
+                zoom: 12.0,
+              ),
+            ),
+          ),
+        Expanded(
+          child: Stack(
+            children: [
+              if (_restaurants.isEmpty && !_isLoading)
+                const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.restaurant, size: 48, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'No restaurants found',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.only(top: 8, bottom: 80),
+                  itemCount: _restaurants.length,
+                  itemBuilder: (context, index) {
+                    final restaurant = _restaurants[index] is Restaurant 
+                      ? _restaurants[index] as Restaurant
+                      : Restaurant.fromJson(_restaurants[index] as Map<String, dynamic>);
+                    return RestaurantCard(
+                      restaurant: restaurant,
+                      onTap: () {
+                        // Handle restaurant selection
+                      },
+                    );
+                  },
+                ),
+              if (_isLoading)
+                const Center(
+                  child: CircularProgressIndicator(),
+                ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: TextField(
+            onSubmitted: _handleSearch,
+            decoration: InputDecoration(
+              hintText: 'Search restaurants near a venue...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surfaceVariant,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 12,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
