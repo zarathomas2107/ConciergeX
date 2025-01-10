@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../services/ai_service.dart';
+import '../services/restaurant_service.dart';
 import '../models/group.dart';
+import '../models/restaurant.dart';
 import 'groups_screen.dart';
 import 'preferences_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -21,7 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   bool _uploadingImage = false;
   String? _error;
-  List<Map<String, dynamic>> _searchResults = [];
+  List<Restaurant> _searchResults = [];
   Map<String, bool> _dietaryRequirements = {};
   Map<String, bool> _restaurantPreferences = {};
   Set<String> _excludedCuisines = {};
@@ -60,18 +63,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // Read file as bytes for iOS compatibility
       final bytes = await image.readAsBytes();
       final fileExt = image.path.split('.').last.toLowerCase();
-      final fileName = '$userId/profile.$fileExt';
+      final fileName = '$userId.$fileExt';
       
       debugPrint('Uploading file: $fileName');
-      
-      // First try to delete any existing profile picture
-      try {
-        await _supabase.storage
-            .from('profile_pictures')
-            .remove(['$userId/profile.jpg', '$userId/profile.jpeg', '$userId/profile.png']);
-      } catch (e) {
-        debugPrint('No existing profile picture to delete or error: $e');
-      }
 
       // Upload new profile picture
       final response = await _supabase.storage
@@ -117,10 +111,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e, stackTrace) {
       debugPrint('Error uploading image: $e');
       debugPrint('Stack trace: $stackTrace');
+      
+      String errorMessage = 'Error uploading image';
+      if (e.toString().contains('storage/bucket-not-found')) {
+        errorMessage = 'Storage not configured. Please contact support.';
+      } else if (e.toString().contains('permission denied')) {
+        errorMessage = 'Permission denied. Please try again.';
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error uploading image: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -133,29 +135,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileHeader() {
+    final firstName = _profile?['first_name'] as String? ?? '';
+    final avatarUrl = _profile?['avatar_url'] as String?;
+    
+    Widget buildAvatar() {
+      if (_uploadingImage) {
+        return const CircularProgressIndicator();
+      }
+      
+      if (avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.startsWith('http')) {
+        return const SizedBox.shrink();
+      }
+      
+      if (firstName.isNotEmpty) {
+        return const SizedBox.shrink();
+      }
+      
+      return const Icon(Icons.person, size: 50, color: Colors.grey);
+    }
+    
     return Container(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Stack(
-            alignment: Alignment.bottomRight,
-            children: [
-              GestureDetector(
-                onTap: _uploadingImage ? null : _uploadProfilePicture,
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage: _profile?['avatar_url'] != null
-                      ? NetworkImage(_profile!['avatar_url'])
-                      : null,
-                  child: _uploadingImage
-                      ? const CircularProgressIndicator()
-                      : _profile?['avatar_url'] == null
-                          ? const Icon(Icons.person, size: 50)
-                          : null,
-                ),
+      padding: const EdgeInsets.only(top: 60, bottom: 20),
+      child: Center(
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTap: _uploadingImage ? null : _uploadProfilePicture,
+              child: CircleAvatar(
+                radius: 40,
+                backgroundColor: Colors.grey[200],
+                backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.startsWith('http')
+                    ? NetworkImage(avatarUrl)
+                    : firstName.isNotEmpty 
+                        ? NetworkImage('https://ui-avatars.com/api/?name=${Uri.encodeComponent(firstName)}&background=random&color=ffffff')
+                        : null,
+                child: buildAvatar(),
               ),
-              Container(
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: Colors.black,
@@ -163,27 +183,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: Icon(
                   _uploadingImage ? Icons.hourglass_empty : Icons.camera_alt,
-                  size: 20,
+                  size: 16,
                   color: Colors.white,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '${_profile?['first_name'] ?? ''} ${_profile?['last_name'] ?? ''}'.trim(),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          if (_profile?['email'] != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              _profile!['email'],
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -309,25 +315,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _searchRestaurants(String searchTerm) async {
-    final aiService = AIService();
+    final restaurantService = RestaurantService();
     final userId = _supabase.auth.currentUser?.id;
     
     if (userId != null) {
-      final processedQuery = await aiService.processSearchQuery(searchTerm, userId);
-      
-      final results = await aiService.searchRestaurants(
-        searchTerm: processedQuery['cuisine_type'] ?? searchTerm,
-        groupIds: List<String>.from(processedQuery['group_ids'] ?? []),
-        userPreferences: {
-          'dietary_requirements': _dietaryRequirements,
-          'excluded_cuisines': _excludedCuisines,
-          'restaurant_preferences': _restaurantPreferences,
-        },
-      );
-
-      setState(() {
-        _searchResults = results;
-      });
+      try {
+        final response = await restaurantService.searchWithAgent(searchTerm, userId);
+        setState(() {
+          _searchResults = response.restaurants;
+        });
+      } catch (e) {
+        debugPrint('Error searching restaurants: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error searching restaurants: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -350,10 +354,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final lastAtIndex = value.lastIndexOf('@');
           final partial = value.substring(lastAtIndex + 1).toLowerCase();
           
-          final aiService = AIService();
+          final restaurantService = RestaurantService();
           final userId = _supabase.auth.currentUser?.id;
           if (userId != null) {
-            final groups = await aiService.getUserGroups(userId);
+            final groups = await restaurantService.getAvailableGroups(userId);
             
             setState(() {
               _groupSuggestions = groups
@@ -365,7 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() => _groupSuggestions = null);
         }
       },
-      onSubmitted: _performSearch,
+      onSubmitted: _searchRestaurants,
     );
   }
 
@@ -409,25 +413,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _performSearch(String query) async {
-    final aiService = AIService();
+    final restaurantService = RestaurantService();
     final userId = _supabase.auth.currentUser?.id;
     
     if (userId != null) {
-      final processedQuery = await aiService.processSearchQuery(query, userId);
-      // Now perform the search with the processed query
-      final results = await aiService.searchRestaurants(
-        searchTerm: processedQuery['cuisine_type'] ?? query,
-        groupIds: List<String>.from(processedQuery['group_ids'] ?? []),
-        userPreferences: {
-          'dietary_requirements': _dietaryRequirements,
-          'excluded_cuisines': _excludedCuisines,
-          'restaurant_preferences': _restaurantPreferences,
-        },
-      );
+      try {
+        final response = await restaurantService.searchWithAgent(query, userId);
+        setState(() {
+          _searchResults = response.restaurants;
+        });
+      } catch (e) {
+        debugPrint('Error performing search: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error performing search: $e')),
+          );
+        }
+      }
+    }
+  }
 
-      setState(() {
-        _searchResults = results;
-      });
+  void _handleLogout() async {
+    // Clear any stored user data or authentication tokens
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    
+    // Navigate to login screen and remove all previous routes
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      );
     }
   }
 
@@ -435,17 +451,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            icon: ImageIcon(
-              const AssetImage('assets/Icons/logout.png'),
-              size: 24,
-              color: Colors.white,
-            ),
-            onPressed: _signOut,
-          ),
-        ],
+        backgroundColor: Colors.black,
+        toolbarHeight: 0,
+        elevation: 0,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -463,38 +471,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 )
               : ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.zero,
                   children: [
                     _buildProfileHeader(),
+                    const SizedBox(height: 20),
                     const Divider(),
-                    ListTile(
-                      title: const Text('Name'),
-                      subtitle: Text('${_profile?['first_name'] ?? 'Not set'} ${_profile?['last_name'] ?? ''}'),
-                      leading: ImageIcon(
-                        const AssetImage('assets/Icons/id-card.png'),
-                        size: 26.4,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     ListTile(
                       title: const Text('Email'),
                       subtitle: Text(_profile?['email'] ?? 'Not set'),
-                      leading: ImageIcon(
-                        const AssetImage('assets/Icons/mail.png'),
-                        size: 26.4,
-                        color: Colors.white,
-                      ),
+                      leading: Icon(Icons.email, size: 26.4, color: Colors.white),
                     ),
                     const SizedBox(height: 16),
                     ListTile(
                       title: const Text('Preferences'),
                       subtitle: const Text('Manage your dietary and location preferences'),
-                      leading: ImageIcon(
-                        const AssetImage('assets/Icons/like.png'),
-                        size: 26.4,
-                        color: Colors.white,
-                      ),
+                      leading: Icon(Icons.favorite, size: 26.4, color: Colors.white),
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -541,15 +533,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ListTile(
                       title: const Text('Groups'),
                       subtitle: const Text('Manage your groups and preferences'),
-                      leading: Image.asset(
-                        'assets/Icons/dinner.png',
-                        width: 26.4,
-                        height: 26.4,
-                      ),
+                      leading: Icon(Icons.group, size: 26.4, color: Colors.white),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const GroupsScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const GroupsScreen(),
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      title: const Text('Logout'),
+                      leading: Icon(Icons.logout, size: 26.4, color: Colors.white),
+                      onTap: _handleLogout,
                     ),
                   ],
                 ),
