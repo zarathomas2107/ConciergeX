@@ -58,6 +58,9 @@ class _HomeScreenState extends HomeScreenState {
   double _venueLat = 0.0;
   double _venueLon = 0.0;
   Map<String, Restaurant> _markerIdToRestaurant = {};
+  Map<String, dynamic>? _groupPreferences;
+  List<Map<String, dynamic>>? _groupSuggestions;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -85,6 +88,7 @@ class _HomeScreenState extends HomeScreenState {
     _pointAnnotationManager = null;
     _mapboxMap = null;
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -284,6 +288,8 @@ class _HomeScreenState extends HomeScreenState {
     setState(() {
       _isLoading = true;
       _searchQuery = query;
+      _groupPreferences = null;  // Reset group preferences on new search
+      _groupPreferences = null;  // Reset group preferences on new search
     });
 
     try {
@@ -291,16 +297,22 @@ class _HomeScreenState extends HomeScreenState {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       
       if (userId != null) {
-        final response = await restaurantService.searchWithAgent(query, userId);
-        debugPrint('Got search response: ${response.preferences}');
+        final searchResponse = await restaurantService.searchWithAgent(query, userId);
+        debugPrint('Got search response: ${searchResponse.preferences}');
         
         if (mounted) {
           // Sort restaurants by distance
-          final restaurants = response.restaurants;
+          final restaurants = searchResponse.restaurants;
           restaurants.sort((a, b) {
             final distanceA = a.distance ?? double.infinity;
             final distanceB = b.distance ?? double.infinity;
             return distanceA.compareTo(distanceB);
+
+          // Get group preferences if available
+          final groupPrefs = searchResponse.groupPreferences;
+          if (groupPrefs != null) {
+            debugPrint('Found group preferences: $groupPrefs');
+          }
           });
 
           // Parse venue information
@@ -309,9 +321,9 @@ class _HomeScreenState extends HomeScreenState {
           double venueLon = 0.0;
 
           // Get location data from the response
-          if (response.location != null) {
-            debugPrint('Location found in response: ${response.location}');
-            venueName = response.location!['name']?.toString() ?? '';
+          if (searchResponse.location != null) {
+            debugPrint('Location found in response: ${searchResponse.location}');
+            venueName = searchResponse.location!['name']?.toString() ?? '';
             
             // Get coordinates from points_of_interest table
             if (venueName.isNotEmpty) {
@@ -341,6 +353,7 @@ class _HomeScreenState extends HomeScreenState {
             _isLoading = false;
             _venueName = venueName;
             _venueLat = venueLat;
+            _groupPreferences = searchResponse.groupPreferences;
             _venueLon = venueLon;
           });
           
@@ -382,6 +395,78 @@ class _HomeScreenState extends HomeScreenState {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        if (_groupPreferences != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Card(
+              child: ExpansionTile(
+                title: Text('Group: ${_groupPreferences!['name']}'),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_groupPreferences!['dietary_requirements']?.isNotEmpty == true)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Dietary Requirements:',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 8,
+                                children: (_groupPreferences!['dietary_requirements'] as List)
+                                    .map((req) => Chip(label: Text(req.toString())))
+                                    .toList(),
+                              ),
+                            ],
+                          ),
+                        if (_groupPreferences!['excluded_cuisines']?.isNotEmpty == true)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Excluded Cuisines:',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 8,
+                                children: (_groupPreferences!['excluded_cuisines'] as List)
+                                    .map((cuisine) => Chip(label: Text(cuisine.toString())))
+                                    .toList(),
+                              ),
+                            ],
+                          ),
+                        if (_groupPreferences!['restaurant_preferences']?.isNotEmpty == true)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Restaurant Preferences:',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 8,
+                                children: (_groupPreferences!['restaurant_preferences'] as List)
+                                    .map((pref) => Chip(label: Text(pref.toString())))
+                                    .toList(),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (_showMap)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -457,25 +542,93 @@ class _HomeScreenState extends HomeScreenState {
               ),
             ],
           ),
-          child: TextField(
-            onSubmitted: _handleSearch,
-            decoration: InputDecoration(
-              hintText: 'Search restaurants near a venue...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(25),
-                borderSide: BorderSide.none,
+          child: Column(
+            children: [
+              TextField(
+                controller: _searchController,
+                onSubmitted: _handleSearch,
+                onChanged: _handleSearchChange,
+                decoration: InputDecoration(
+                  hintText: 'Search restaurants near a venue... (Type @ to mention a group)',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _groupSuggestions != null ? 
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        setState(() {
+                          _groupSuggestions = null;
+                        });
+                      },
+                    ) : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
               ),
-              filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceVariant,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 12,
-              ),
-            ),
+              if (_groupSuggestions != null)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: _groupSuggestions!.map((group) => ListTile(
+                      title: Text(group['name']),
+                      onTap: () {
+                        final currentText = _searchController.text;
+                        final lastAtIndex = currentText.lastIndexOf('@');
+                        final newText = currentText.substring(0, lastAtIndex) + '@${group['name']} ';
+                        _searchController.value = TextEditingValue(
+                          text: newText,
+                          selection: TextSelection.collapsed(offset: newText.length),
+                        );
+                        setState(() {
+                          _groupSuggestions = null;
+                        });
+                      },
+                    )).toList(),
+                  ),
+                ),
+            ],
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _handleSearchChange(String value) async {
+    if (value.contains('@')) {
+      final lastAtIndex = value.lastIndexOf('@');
+      final partial = value.substring(lastAtIndex + 1).toLowerCase();
+      
+      final restaurantService = RestaurantService();
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        final groups = await restaurantService.getAvailableGroups(userId);
+        
+        setState(() {
+          _groupSuggestions = groups
+              .where((g) => g['name'].toLowerCase().contains(partial))
+              .toList();
+        });
+      }
+    } else {
+      setState(() => _groupSuggestions = null);
+    }
   }
 }
