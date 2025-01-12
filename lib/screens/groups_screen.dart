@@ -222,28 +222,45 @@ class _GroupsScreenState extends State<GroupsScreen> {
                             );
                           }
                           return Column(
-                            children: snapshot.data!.map((member) => ListTile(
-                              title: Text(
-                                '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
-                                style: Theme.of(context).textTheme.titleMedium,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: () => _addMember(group),
+                                    icon: const Icon(Icons.person_add),
+                                    label: const Text('Add Member'),
+                                  ),
+                                ],
                               ),
-                              subtitle: member['email'] != null 
-                                ? Text(member['email']) 
-                                : null,
-                              trailing: IconButton(
-                                icon: const Icon(Icons.edit),
-                                onPressed: () {
-                                  final groupMember = GroupMember(
-                                    id: member['id'],
-                                    name: '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
-                                    dietaryRequirements: List<String>.from(member['dietary_requirements'] ?? []),
-                                    restaurantPreferences: List<String>.from(member['restaurant_preferences'] ?? []),
-                                    locationPreferences: List<String>.from(member['location_preferences'] ?? []),
-                                  );
-                                  _editMemberPreferences(group, groupMember);
-                                },
-                              ),
-                            )).toList(),
+                              ...snapshot.data!.map((member) => ListTile(
+                                title: Text(
+                                  '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                subtitle: member['email'] != null 
+                                  ? Text(member['email']) 
+                                  : null,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () {
+                                        final groupMember = GroupMember(
+                                          id: member['id'],
+                                          name: '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
+                                          dietaryRequirements: List<String>.from(member['dietary_requirements'] ?? []),
+                                          restaurantPreferences: List<String>.from(member['restaurant_preferences'] ?? []),
+                                          locationPreferences: List<String>.from(member['location_preferences'] ?? []),
+                                        );
+                                        _editMemberPreferences(group, groupMember);
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              )).toList(),
+                            ],
                           );
                         },
                       ),
@@ -309,15 +326,22 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Future<void> _editMemberPreferences(Group group, GroupMember member) async {
     if (!mounted) return;
 
-    await Navigator.push(
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => MemberPreferencesScreen(
           member: member,
           groupId: group.id,
+          isCreator: group.createdBy == _supabase.auth.currentUser?.id,
+          onRemoveMember: () => _removeMember(group, member.id),
         ),
       ),
     );
+    
+    // If true was returned, member was removed
+    if (result == true) {
+      return;
+    }
     
     // Reload group details after returning from preferences screen
     if (mounted) {
@@ -372,6 +396,63 @@ class _GroupsScreenState extends State<GroupsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error deleting group: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeMember(Group group, String memberId) async {
+    // Show confirmation dialog
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Member'),
+        content: const Text('Are you sure you want to remove this member from the group?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRemove != true || !mounted) return;
+
+    try {
+      // Remove the member ID from the group's member_ids array
+      final updatedMemberIds = group.memberIds.where((id) => id != memberId).toList();
+      
+      await _supabase
+          .from('groups')
+          .update({
+            'member_ids': updatedMemberIds,
+          })
+          .eq('id', group.id);
+
+      if (mounted) {
+        // Schedule reload for next frame
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _loadGroups();
+          }
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Member removed successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error removing member: $e')),
         );
       }
     }

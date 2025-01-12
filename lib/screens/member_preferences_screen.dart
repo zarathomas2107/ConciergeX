@@ -7,11 +7,15 @@ import '../widgets/multi_select_location_dialog.dart';
 class MemberPreferencesScreen extends StatefulWidget {
   final GroupMember member;
   final String groupId;
+  final bool isCreator;
+  final VoidCallback onRemoveMember;
 
   const MemberPreferencesScreen({
     Key? key,
     required this.member,
     required this.groupId,
+    required this.isCreator,
+    required this.onRemoveMember,
   }) : super(key: key);
 
   @override
@@ -172,13 +176,20 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        title: Text('${widget.member.name}\'s Preferences'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(widget.member.name),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _savePreferences,
-          ),
+          // Show remove button if:
+          // 1. Current user is the creator and not removing themselves
+          // 2. Current user is removing themselves
+          if ((widget.isCreator && widget.member.id != _supabase.auth.currentUser?.id) ||
+              (!widget.isCreator && widget.member.id == _supabase.auth.currentUser?.id))
+            IconButton(
+              icon: const Icon(Icons.person_remove),
+              onPressed: _confirmRemoveMember,
+              color: Colors.red,
+            ),
         ],
       ),
       body: _loading
@@ -451,5 +462,35 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmRemoveMember() async {
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Member'),
+        content: const Text('Are you sure you want to remove this member from the group?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRemove == true) {
+      widget.onRemoveMember();
+      if (mounted) {
+        Navigator.pop(context, true); // Return true to indicate member was removed
+      }
+    }
   }
 } 
