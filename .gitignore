@@ -31,3 +31,4 @@ ios/Runner.xcworkspace
 ios/Flutter/Debug.xcconfig
 ios/Flutter/Release.xcconfig
 ios/Flutter/Generated.xcconfig
+.env
