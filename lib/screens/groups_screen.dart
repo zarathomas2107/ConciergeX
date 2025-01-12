@@ -675,7 +675,6 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
         'first_name': _firstNameController.text,
         'last_name': _lastNameController.text,
         'email': _emailController.text,
-        'name': '${_firstNameController.text} ${_lastNameController.text}'.trim(),
         'dietary_requirements': preferences['dietary_requirements'] ?? [],
         'restaurant_preferences': preferences['restaurant_preferences'] ?? [],
       }).select().single();
