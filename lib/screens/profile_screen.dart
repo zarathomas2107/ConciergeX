@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import '../services/restaurant_service.dart';
 import '../models/group.dart';
 import '../models/restaurant.dart';
@@ -19,10 +17,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _supabase = Supabase.instance.client;
-  final _imagePicker = ImagePicker();
   Map<String, dynamic>? _profile;
   bool _loading = true;
-  bool _uploadingImage = false;
   String? _error;
   List<Restaurant> _searchResults = [];
   Map<String, bool> _dietaryRequirements = {};
@@ -31,168 +27,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Group? _selectedGroup;
   final _searchController = TextEditingController();
   List<Map<String, dynamic>>? _groupSuggestions;
-
-  Future<void> _uploadProfilePicture() async {
-    try {
-      setState(() => _uploadingImage = true);
-      debugPrint('Starting image upload process...');
-
-      // Pick image from gallery
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 80,
-        requestFullMetadata: false,
-      );
-
-      debugPrint('Image picked: ${image?.path}');
-
-      if (image == null) {
-        debugPrint('No image selected');
-        setState(() => _uploadingImage = false);
-        return;
-      }
-
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-      debugPrint('User ID: $userId');
-
-      // Read file as bytes for iOS compatibility
-      final bytes = await image.readAsBytes();
-      final fileExt = image.path.split('.').last.toLowerCase();
-      final fileName = '$userId.$fileExt';
-      
-      debugPrint('Uploading file: $fileName');
-
-      // Upload new profile picture
-      final response = await _supabase.storage
-          .from('profile_pictures')
-          .uploadBinary(
-            fileName, 
-            bytes,
-            fileOptions: FileOptions(
-              upsert: true,
-              contentType: 'image/$fileExt',
-            ),
-          );
-      debugPrint('Upload response: $response');
-
-      // Get public URL for the image
-      final imageUrl = _supabase.storage
-          .from('profile_pictures')
-          .getPublicUrl(fileName);
-      debugPrint('Image URL: $imageUrl');
-
-      // Update profile with new avatar URL
-      await _supabase
-          .from('profiles')
-          .update({
-            'avatar_url': imageUrl,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', userId);
-      debugPrint('Profile updated with new avatar URL');
-
-      // Reload profile
-      await _loadProfile();
-      debugPrint('Profile reloaded');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile picture updated successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Error uploading image: $e');
-      debugPrint('Stack trace: $stackTrace');
-      
-      String errorMessage = 'Error uploading image';
-      if (e.toString().contains('storage/bucket-not-found')) {
-        errorMessage = 'Storage not configured. Please contact support.';
-      } else if (e.toString().contains('permission denied')) {
-        errorMessage = 'Permission denied. Please try again.';
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _uploadingImage = false);
-      }
-    }
-  }
-
-  Widget _buildProfileHeader() {
-    final firstName = _profile?['first_name'] as String? ?? '';
-    final avatarUrl = _profile?['avatar_url'] as String?;
-    
-    Widget buildAvatar() {
-      if (_uploadingImage) {
-        return const CircularProgressIndicator();
-      }
-      
-      if (avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.startsWith('http')) {
-        return const SizedBox.shrink();
-      }
-      
-      if (firstName.isNotEmpty) {
-        return const SizedBox.shrink();
-      }
-      
-      return const Icon(Icons.person, size: 50, color: Colors.grey);
-    }
-    
-    return Container(
-      padding: const EdgeInsets.only(top: 16, bottom: 16),
-      child: Center(
-        child: Stack(
-          children: [
-            GestureDetector(
-              onTap: _uploadingImage ? null : _uploadProfilePicture,
-              child: CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.grey[200],
-                backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.startsWith('http')
-                    ? NetworkImage(avatarUrl)
-                    : firstName.isNotEmpty 
-                        ? NetworkImage('https://ui-avatars.com/api/?name=${Uri.encodeComponent(firstName)}&background=random&color=ffffff')
-                        : null,
-                child: buildAvatar(),
-              ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Icon(
-                  _uploadingImage ? Icons.hourglass_empty : Icons.camera_alt,
-                  size: 16,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   void initState() {
@@ -241,7 +75,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'first_name': user.userMetadata?['first_name'] ?? '',
           'last_name': user.userMetadata?['last_name'] ?? '',
           'phone': user.phone,
-          'avatar_url': null,
           'email_notifications': false,
           'push_notifications': false,
           'created_at': DateTime.now().toIso8601String(),
@@ -447,19 +280,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Widget _buildProfileHeader() {
+    final firstName = _profile?['first_name'] as String? ?? '';
+    
+    return Container(
+      padding: const EdgeInsets.only(top: 32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.person, size: 60, color: Colors.grey),
+            if (firstName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  firstName,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          },
+        ),
+        title: const Text('Profile'),
       ),
-      body: _loading
+      body: SafeArea(
+        child: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: EdgeInsets.zero,
               children: [
+                const SizedBox(height: 24),
                 _buildProfileHeader(),
+                const SizedBox(height: 64),
                 ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  title: const Text('Email'),
+                  subtitle: Text(_profile?['email'] ?? 'Not set'),
+                  leading: Icon(Icons.email, size: 26.4, color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                   leading: const Icon(Icons.settings),
                   title: const Text('Preferences'),
                   subtitle: const Text('Manage your dining preferences and groups'),
@@ -495,29 +373,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     );
                   },
                 ),
+                const SizedBox(height: 16),
                 ListTile(
-                  title: const Text('Email'),
-                  subtitle: Text(_profile?['email'] ?? 'Not set'),
-                  leading: Icon(Icons.email, size: 26.4, color: Colors.white),
-                ),
-                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                   title: const Text('Groups'),
                   subtitle: const Text('Manage your groups and preferences'),
                   leading: Icon(Icons.group, size: 26.4, color: Colors.white),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const GroupsScreen(),
-                    ),
-                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const GroupsScreen(fromProfile: true),
+                      ),
+                    );
+                  },
                 ),
+                const SizedBox(height: 16),
                 ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                   title: const Text('Logout'),
                   leading: Icon(Icons.logout, size: 26.4, color: Colors.white),
                   onTap: _handleLogout,
                 ),
               ],
             ),
+      ),
     );
   }
 }

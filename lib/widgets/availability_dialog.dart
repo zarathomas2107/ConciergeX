@@ -2,29 +2,51 @@ import 'package:flutter/material.dart';
 import '../models/restaurant.dart';
 import 'package:intl/intl.dart';
 
-class AvailabilityDialog extends StatelessWidget {
+class AvailabilityDialog extends StatefulWidget {
   final Restaurant restaurant;
+  final List<AvailabilitySlot> availableSlots;
 
   const AvailabilityDialog({
     Key? key,
     required this.restaurant,
+    required this.availableSlots,
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    // Group slots by date
-    Map<DateTime, List<AvailabilitySlot>> slotsByDate = {};
-    if (restaurant.availableSlots != null) {
-      for (var slot in restaurant.availableSlots!) {
-        final date = DateTime(slot.date.year, slot.date.month, slot.date.day);
-        slotsByDate.putIfAbsent(date, () => []).add(slot);
-      }
-    }
+  State<AvailabilityDialog> createState() => _AvailabilityDialogState();
+}
 
+class _AvailabilityDialogState extends State<AvailabilityDialog> {
+  late DateTime selectedDate;
+  late final Map<DateTime, List<AvailabilitySlot>> slotsByDate;
+
+  @override
+  void initState() {
+    super.initState();
+    // Group slots by date
+    slotsByDate = {};
+    for (var slot in widget.availableSlots) {
+      final date = DateTime(slot.date.year, slot.date.month, slot.date.day);
+      if (!slotsByDate.containsKey(date)) {
+        slotsByDate[date] = [];
+      }
+      slotsByDate[date]!.add(slot);
+    }
+    
+    // Set initial selected date
+    final dates = slotsByDate.keys.toList()..sort();
+    selectedDate = dates.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dates = slotsByDate.keys.toList()..sort();
+    
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Container(
-        padding: const EdgeInsets.all(16),
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        width: double.infinity,
+        padding: const EdgeInsets.all(8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,68 +55,90 @@ class AvailabilityDialog extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    restaurant.name,
-                    style: Theme.of(context).textTheme.titleLarge,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.restaurant.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        widget.restaurant.cuisineType,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            if (restaurant.availableSlots?.isEmpty ?? true)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('No availability found for the selected dates'),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  itemCount: slotsByDate.length,
-                  itemBuilder: (context, index) {
-                    final date = slotsByDate.keys.elementAt(index);
-                    final slots = slotsByDate[date]!;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: Text(
-                            DateFormat('EEEE, MMMM d, y').format(date),
-                            style: Theme.of(context).textTheme.titleMedium,
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: dates.map((date) {
+                  final isSelected = date == selectedDate;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          selectedDate = date;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.blue : Colors.grey[800],
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          '${date.day}/${date.month}',
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.grey[400],
+                            fontSize: 14,
                           ),
                         ),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: slots.map((slot) {
-                            return ElevatedButton(
-                              onPressed: () {
-                                // TODO: Handle slot selection
-                                Navigator.of(context).pop({
-                                  'date': slot.date,
-                                  'time': slot.timeSlot,
-                                });
-                              },
-                              child: Text(
-                                slot.timeSlot.format(context),
-                                textAlign: TextAlign.center,
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        const Divider(height: 24),
-                      ],
-                    );
-                  },
-                ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: slotsByDate[selectedDate]!.map((slot) {
+                final hour = slot.timeSlot.hour.toString().padLeft(2, '0');
+                final minute = slot.timeSlot.minute.toString().padLeft(2, '0');
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$hour:$minute',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),

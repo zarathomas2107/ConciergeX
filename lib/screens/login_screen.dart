@@ -39,7 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(
             builder: (context) => HomeScreen(
               restaurants: [],
-              onRestaurantsUpdated: null,
+              onRestaurantsUpdated: (restaurants) {
+                // Default empty implementation
+              },
             ),
           ),
           (route) => false,

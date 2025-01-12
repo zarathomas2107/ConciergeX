@@ -25,20 +25,20 @@ class _SearchScreenState extends State<SearchScreen> {
 
       // Get today's date
       final now = DateTime.now();
-      final dateStr = DateFormat('yyyy-MM-dd').format(now);
+      final startDate = now;
+      final endDate = now;
+      final startTime = const TimeOfDay(hour: 0, minute: 0);
+      final endTime = const TimeOfDay(hour: 22, minute: 0);
 
-      // Default search parameters
-      final defaultParams = {
-        'restaurant_name': '',
-        'cuisine_type': '',
-        'start_date': dateStr,
-        'end_date': dateStr,
-        'start_time': '19:00',
-        'end_time': '21:00',
-        'requested_seats': 2,
-      };
-
-      final response = await _restaurantService.searchWithParams(defaultParams);
+      final response = await _restaurantService.getRestaurantsNearVenue(
+        'VyTA Covent Garden',  // Default venue
+        5000.0,  // 5km radius
+        [],  // No excluded cuisines
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+      );
       
       setState(() {
         _restaurants = response;
@@ -67,7 +67,56 @@ class _SearchScreenState extends State<SearchScreen> {
 
     try {
       final params = _restaurantService.parseSearchQuery(query);
-      final results = await _restaurantService.searchWithParams(params);
+      debugPrint('Full API Response: $params');
+      
+      // Extract datetime info from params
+      final datetime = params['datetime'] as Map<String, dynamic>?;
+      
+      final startDate = datetime?['start_date'] != null 
+          ? DateTime.parse(datetime!['start_date']) 
+          : DateTime.now();
+      final endDate = datetime?['end_date'] != null 
+          ? DateTime.parse(datetime!['end_date']) 
+          : DateTime.now();
+      
+      // Parse time strings to TimeOfDay
+      final startTimeStr = datetime?['start_time'] ?? '';
+      final endTimeStr = datetime?['end_time'] ?? '';
+      
+      final startTimeParts = startTimeStr.isNotEmpty ? startTimeStr.split(':') : null;
+      final endTimeParts = endTimeStr.isNotEmpty ? endTimeStr.split(':') : null;
+      
+      final startTime = startTimeParts != null ? TimeOfDay(
+        hour: int.parse(startTimeParts[0]), 
+        minute: int.parse(startTimeParts[1])
+      ) : const TimeOfDay(hour: 0, minute: 0);
+      
+      final endTime = endTimeParts != null ? TimeOfDay(
+        hour: int.parse(endTimeParts[0]), 
+        minute: int.parse(endTimeParts[1])
+      ) : const TimeOfDay(hour: 22, minute: 0);
+      debugPrint('Final TimeOfDay - Start: ${startTime.format(context)}, End: ${endTime.format(context)}');
+
+      // Get excluded cuisines
+      List<String> excludedCuisines = [];
+      if (params['excluded_cuisines'] != null) {
+        var excluded = params['excluded_cuisines'];
+        if (excluded is List) {
+          excludedCuisines.addAll(List<String>.from(excluded));
+        } else if (excluded is String) {
+          excludedCuisines.add(excluded);
+        }
+      }
+
+      final results = await _restaurantService.getRestaurantsNearVenue(
+        'VyTA Covent Garden',  // Default venue
+        5000.0,  // 5km radius
+        excludedCuisines,
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+      );
       
       setState(() {
         _restaurants = results;
@@ -109,87 +158,103 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: EdgeInsets.all(16),
-              itemCount: _chatHistory.length + _restaurants.length,
-              itemBuilder: (context, index) {
-                if (index < _chatHistory.length) {
-                  final chat = _chatHistory[index];
-                  return ChatBubble(
-                    message: chat['message']!,
-                    isUser: chat['sender'] == 'user',
-                  );
-                } else {
-                  final restaurantIndex = index - _chatHistory.length;
-                  return RestaurantCard(
-                    restaurant: _restaurants[restaurantIndex],
-                    onTap: () {
-                      // Handle restaurant selection
-                    },
-                  );
-                }
-              },
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: EdgeInsets.all(16),
+                itemCount: _chatHistory.length + _restaurants.length,
+                itemBuilder: (context, index) {
+                  if (index < _chatHistory.length) {
+                    final chat = _chatHistory[index];
+                    return ChatBubble(
+                      message: chat['message']!,
+                      isUser: chat['sender'] == 'user',
+                    );
+                  } else {
+                    final restaurantIndex = index - _chatHistory.length;
+                    return RestaurantCard(
+                      restaurant: _restaurants[restaurantIndex],
+                      onTap: () {
+                        // Handle restaurant selection
+                      },
+                      startDate: DateTime.now(),
+                      endDate: DateTime.now(),
+                      startTime: const TimeOfDay(hour: 0, minute: 0),
+                      endTime: const TimeOfDay(hour: 22, minute: 0),
+                    );
+                  }
+                },
+              ),
             ),
-          ),
-          if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: CircularProgressIndicator(),
-            ),
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 5,
-                  offset: Offset(0, -2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search restaurants...',
-                      border: OutlineInputBorder(
+            if (_isLoading)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: CircularProgressIndicator(),
+              ),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(25),
+                        color: Colors.grey[100],
                       ),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search restaurants...',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          hintStyle: TextStyle(color: Colors.grey[600]),
+                        ),
+                        onSubmitted: (query) {
+                          if (query.isNotEmpty) {
+                            _handleSearch(query);
+                            _searchController.clear();
+                          }
+                        },
                       ),
                     ),
-                    onSubmitted: (query) {
-                      if (query.isNotEmpty) {
-                        _handleSearch(query);
-                        _searchController.clear();
-                      }
-                    },
                   ),
-                ),
-                SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(Icons.send),
-                  onPressed: () {
-                    if (_searchController.text.isNotEmpty) {
-                      _handleSearch(_searchController.text);
-                      _searchController.clear();
-                    }
-                  },
-                  color: Colors.green,
-                ),
-              ],
+                  SizedBox(width: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.green,
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.send, color: Colors.white),
+                      onPressed: () {
+                        if (_searchController.text.isNotEmpty) {
+                          _handleSearch(_searchController.text);
+                          _searchController.clear();
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

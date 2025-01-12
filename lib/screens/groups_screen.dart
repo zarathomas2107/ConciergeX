@@ -4,9 +4,15 @@ import '../models/group.dart';
 import 'member_preferences_screen.dart';
 import 'preferences_screen.dart';
 import '../utils/string_extensions.dart';
+import 'profile_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
-  const GroupsScreen({Key? key}) : super(key: key);
+  final bool fromProfile;
+  
+  const GroupsScreen({
+    Key? key,
+    this.fromProfile = false,
+  }) : super(key: key);
 
   @override
   _GroupsScreenState createState() => _GroupsScreenState();
@@ -148,7 +154,15 @@ class _GroupsScreenState extends State<GroupsScreen> {
     try {
       final response = await _supabase
           .from('profiles')
-          .select()
+          .select('''
+            id,
+            first_name,
+            last_name,
+            email,
+            dietary_requirements,
+            restaurant_preferences,
+            location_preferences
+          ''')
           .inFilter('id', memberIds);
       
       return List<Map<String, dynamic>>.from(response);
@@ -162,16 +176,20 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: ImageIcon(
-              const AssetImage('assets/Icons/profile-user.png'),
-              color: Colors.white,
-            ),
-          ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (widget.fromProfile) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
         title: const Text('Groups'),
       ),
@@ -215,13 +233,25 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           return Column(
                             children: snapshot.data!.map((member) => ListTile(
                               title: Text(
-                                member['name'] ?? 
                                 '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               subtitle: member['email'] != null 
                                 ? Text(member['email']) 
                                 : null,
+                              trailing: IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () {
+                                  final groupMember = GroupMember(
+                                    id: member['id'],
+                                    name: '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
+                                    dietaryRequirements: List<String>.from(member['dietary_requirements'] ?? []),
+                                    restaurantPreferences: List<String>.from(member['restaurant_preferences'] ?? []),
+                                    locationPreferences: List<String>.from(member['location_preferences'] ?? []),
+                                  );
+                                  _editMemberPreferences(group, groupMember);
+                                },
+                              ),
                             )).toList(),
                           );
                         },
@@ -234,8 +264,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _createGroup,
         backgroundColor: Colors.black,
-        child: ImageIcon(
-          const AssetImage('assets/Icons/add.png'),
+        child: Icon(
+          Icons.add,
           size: 24,
           color: Colors.white,
         ),
@@ -286,16 +316,25 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _editMemberPreferences(Group group, GroupMember member) async {
+    if (!mounted) return;
+
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => MemberPreferencesScreen(
+        builder: (context) => MemberPreferencesScreen(
           member: member,
           groupId: group.id,
         ),
       ),
     );
-    _loadGroups();  // Reload to show updated preferences
+    
+    // Reload group details after returning from preferences screen
+    if (mounted) {
+      setState(() {
+        _loading = true;
+      });
+      await _loadGroups();
+    }
   }
 
   Future<void> _deleteGroup(Group group) async {

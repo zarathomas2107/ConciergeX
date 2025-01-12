@@ -4,6 +4,7 @@ import '../models/restaurant.dart';
 import '../services/restaurant_service.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
+import 'groups_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -67,80 +68,105 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  void _onTabTapped(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAuthenticated = _supabase.auth.currentUser != null;
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        title: const Text(
-          'ConciergeX',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 24,
-            letterSpacing: 0.5,
-          ),
+      extendBodyBehindAppBar: true,
+      extendBody: true,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(child: Text(_error!))
+              : _buildContent(),
+      bottomNavigationBar: Container(
+        height: 87,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, -1),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: _onTabTapped,
+          selectedItemColor: Colors.blue,
+          unselectedItemColor: Colors.grey,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          iconSize: 24,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _currentIndex == 0
-                ? (_error != null
-                    ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
-                    : _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : HomeScreen(
+    );
+  }
+
+  Widget _buildContent() {
+    return Column(
+      children: [
+        Expanded(
+          child: IndexedStack(
+            index: _currentIndex,
+            children: [
+              _error != null
+                ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                : _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Stack(
+                        children: [
+                          HomeScreen(
                             key: _homeScreenKey,
                             restaurants: _restaurants,
                             onRestaurantsUpdated: _handleRestaurantsUpdated,
-                          ))
-                : const ProfileScreen(),
+                          ),
+                          Positioned(
+                            top: MediaQuery.of(context).padding.top + 8,
+                            right: 16,
+                            child: IconButton(
+                              icon: const Icon(Icons.group),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const GroupsScreen()),
+                                );
+                              },
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.grey[800],
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.all(12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              const ProfileScreen(),
+            ],
           ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.black,
-        currentIndex: _currentIndex,
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.grey,
-        onTap: (index) {
-          if (index == 1 && !isAuthenticated) {
-            Navigator.pushNamed(context, '/login');
-          } else {
-            setState(() => _currentIndex = index);
-          }
-        },
-        items: [
-          BottomNavigationBarItem(
-            icon: ImageIcon(
-              const AssetImage('assets/Icons/home.png'),
-              size: 24,
-              color: Colors.grey,
-            ),
-            activeIcon: ImageIcon(
-              const AssetImage('assets/Icons/home.png'),
-              size: 24,
-              color: Colors.white,
-            ),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: ImageIcon(
-              const AssetImage('assets/Icons/profile-user.png'),
-              size: 24,
-              color: Colors.grey,
-            ),
-            activeIcon: ImageIcon(
-              const AssetImage('assets/Icons/profile-user.png'),
-              size: 24,
-              color: Colors.white,
-            ),
-            label: 'Profile',
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
