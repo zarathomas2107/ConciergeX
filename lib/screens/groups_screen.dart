@@ -7,12 +7,7 @@ import '../utils/string_extensions.dart';
 import 'profile_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
-  final bool fromProfile;
-  
-  const GroupsScreen({
-    Key? key,
-    this.fromProfile = false,
-  }) : super(key: key);
+  const GroupsScreen({Key? key}) : super(key: key);
 
   @override
   _GroupsScreenState createState() => _GroupsScreenState();
@@ -181,14 +176,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            if (widget.fromProfile) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              );
-            } else {
-              Navigator.pop(context);
-            }
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfileScreen()),
+            );
           },
         ),
         title: const Text('Groups'),

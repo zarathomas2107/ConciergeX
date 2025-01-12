@@ -43,6 +43,9 @@ class HomeScreenState extends State<HomeScreen> {
   TimeOfDay? _currentEndTime;
   final ScrollController _scrollController = ScrollController();
   bool _hasSearched = false;
+  List<Map<String, dynamic>> _groupSuggestions = [];
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
   
   late final CameraPosition _initialCameraPosition = CameraPosition(
     target: LatLng(_venueLat, _venueLon),
@@ -60,16 +63,48 @@ class HomeScreenState extends State<HomeScreen> {
     super.initState();
     _restaurants = widget.restaurants;
     _filteredRestaurants = _restaurants;
+    _searchController.addListener(_onSearchChanged);
+    
+    // Create markers for initial restaurants
+    for (final restaurant in _restaurants) {
+      if (restaurant.latitude != 0 && restaurant.longitude != 0) {
+        _createCustomMarker(restaurant.name).then((customMarker) {
+          if (mounted) {
+            setState(() {
+              _markers.add(
+                Marker(
+                  markerId: MarkerId(restaurant.id),
+                  position: LatLng(restaurant.latitude, restaurant.longitude),
+                  icon: customMarker,
+                  anchor: const Offset(0.5, 0.5),
+                  infoWindow: InfoWindow(
+                    title: restaurant.name,
+                    snippet: restaurant.distance != null 
+                        ? '${restaurant.cuisineType} • ${(restaurant.distance! / 1000).toStringAsFixed(1)}km'
+                        : restaurant.cuisineType,
+                  ),
+                ),
+              );
+            });
+          }
+        });
+      }
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() {
         _showMap = true;
       });
+      _updateMap();
     });
   }
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    _updateMap();
+    // Only update map if markers are empty
+    if (_markers.isEmpty) {
+      _updateMap();
+    }
   }
 
   Future<BitmapDescriptor> _createCustomMarker(String name) async {
@@ -354,6 +389,115 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _onSearchChanged() {
+    final text = _searchController.text;
+    final selection = _searchController.selection;
+    
+    if (selection.baseOffset != -1) {
+      final textBeforeCursor = text.substring(0, selection.baseOffset);
+      final lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+      
+      if (lastAtSymbol != -1) {
+        final query = textBeforeCursor.substring(lastAtSymbol + 1).toLowerCase();
+        _showGroupSuggestions(query);
+      } else {
+        _hideGroupSuggestions();
+      }
+    }
+  }
+
+  void _showGroupSuggestions(String query) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final groups = await _restaurantService.getAvailableGroups(userId);
+      if (!mounted) return;
+
+      setState(() {
+        _groupSuggestions = groups.where((group) {
+          final groupName = group['name'].toString().toLowerCase();
+          return groupName.contains(query);
+        }).toList();
+      });
+
+      _overlayEntry?.remove();
+      _overlayEntry = _createOverlayEntry();
+      Overlay.of(context).insert(_overlayEntry!);
+    } catch (e) {
+      debugPrint('Error fetching group suggestions: $e');
+    }
+  }
+
+  void _hideGroupSuggestions() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width * 0.95,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0, 60),  // Adjust this value to position the suggestions below the search bar
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              constraints: BoxConstraints(
+                maxHeight: 200,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: _groupSuggestions.length,
+                itemBuilder: (context, index) {
+                  final group = _groupSuggestions[index];
+                  final memberCount = (group['members'] as List?)?.length ?? 0;
+                  return ListTile(
+                    title: Text(group['name']),
+                    subtitle: Text('$memberCount members'),
+                    onTap: () {
+                      final text = _searchController.text;
+                      final selection = _searchController.selection;
+                      final textBeforeCursor = text.substring(0, selection.baseOffset);
+                      final lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+                      
+                      final groupName = group['name'].toString();
+                      final newText = text.replaceRange(
+                        lastAtSymbol + 1, 
+                        selection.baseOffset,
+                        groupName
+                      );
+                      
+                      _searchController.value = TextEditingValue(
+                        text: newText,
+                        selection: TextSelection.collapsed(
+                          offset: lastAtSymbol + 1 + groupName.length,
+                        ),
+                      );
+                      
+                      _hideGroupSuggestions();
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -423,24 +567,27 @@ class HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search restaurants...',
-                      filled: true,
-                      fillColor: Colors.grey[800],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                  child: CompositedTransformTarget(
+                    link: _layerLink,
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search restaurants...',
+                        filled: true,
+                        fillColor: Colors.grey[800],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        prefixIcon: const Icon(Icons.search),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
-                      prefixIcon: const Icon(Icons.search),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                      onSubmitted: _search,
+                      textInputAction: TextInputAction.search,
                     ),
-                    onSubmitted: _search,
-                    textInputAction: TextInputAction.search,
                   ),
                 ),
               ],
@@ -456,6 +603,7 @@ class HomeScreenState extends State<HomeScreen> {
     _searchController.dispose();
     _mapController?.dispose();
     _scrollController.dispose();
+    _hideGroupSuggestions();
     super.dispose();
   }
 }

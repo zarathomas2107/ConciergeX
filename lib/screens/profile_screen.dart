@@ -380,10 +380,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   subtitle: const Text('Manage your groups and preferences'),
                   leading: Icon(Icons.group, size: 26.4, color: Colors.white),
                   onTap: () {
-                    Navigator.push(
+                    Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const GroupsScreen(fromProfile: true),
+                        builder: (context) => const GroupsScreen(),
                       ),
                     );
                   },

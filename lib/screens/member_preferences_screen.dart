@@ -33,6 +33,8 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
     'dairy_free',
     'nut_free',
     'shellfish_allergy',
+    'no_beef',
+    'no_pork'
   ];
 
   final List<String> _availableRestaurantPreferences = [
@@ -74,25 +76,28 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
   Future<void> _loadLocations() async {
     try {
       final response = await _supabase
-          .from('london_areas')
-          .select('name, area_type')
-          .order('area_type', ascending: false)
-          .order('name');
+          .from('restaurants')
+          .select('area')
+          .not('area', 'is', null)
+          .order('area', ascending: true);
       
-      final groupedData = <String, List<String>>{};
+      final areas = <String>{};  // Using a Set for unique values
+      final seenAreas = <String>{};  // Track lowercase versions for case-insensitive uniqueness
       
       for (final row in response) {
-        final areaType = (row['area_type'] as String?) ?? 'Other';
-        final name = row['name'] as String;
+        final area = row['area'] as String;
+        final lowerArea = area.toLowerCase();
         
-        if (!groupedData.containsKey(areaType)) {
-          groupedData[areaType] = [];
+        if (!seenAreas.contains(lowerArea)) {
+          seenAreas.add(lowerArea);
+          areas.add(area);
         }
-        groupedData[areaType]!.add(name);
       }
       
       setState(() {
-        _groupedLocations = groupedData;
+        _groupedLocations = {
+          'Areas': areas.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())),
+        };
       });
     } catch (e) {
       debugPrint('Error loading locations: $e');
@@ -184,7 +189,16 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
                 Card(
                   child: ExpansionTile(
                     initiallyExpanded: _isDietaryExpanded,
-                    title: const Text('Dietary Requirements'),
+                    title: const Text(
+                      'Dietary Requirements',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    onExpansionChanged: (expanded) {
+                      setState(() => _isDietaryExpanded = expanded);
+                    },
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(16.0),

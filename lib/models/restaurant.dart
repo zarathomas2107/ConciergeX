@@ -12,6 +12,7 @@ class Restaurant {
   final double longitude;
   final double? distance;
   final int? priceLevel;
+  final String? area;
   final List<AvailabilitySlot>? availableSlots;
 
   String get photoUrl {
@@ -36,6 +37,7 @@ class Restaurant {
     required this.longitude,
     this.distance,
     this.priceLevel,
+    this.area,
     this.availableSlots,
   });
 
@@ -79,6 +81,7 @@ class Restaurant {
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       distance: (json['distance'] as num?)?.toDouble(),
+      area: json['area'] as String?,
       availableSlots: slots,
     );
   }
@@ -96,6 +99,7 @@ class Restaurant {
       'longitude': longitude,
       'distance_meters': distance,
       'price_level': priceLevel,
+      'area': area,
     };
   }
 

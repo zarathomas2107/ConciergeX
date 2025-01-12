@@ -142,24 +142,6 @@ class _MainScreenState extends State<MainScreen> {
                             restaurants: _restaurants,
                             onRestaurantsUpdated: _handleRestaurantsUpdated,
                           ),
-                          Positioned(
-                            top: MediaQuery.of(context).padding.top + 8,
-                            right: 16,
-                            child: IconButton(
-                              icon: const Icon(Icons.group),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const GroupsScreen()),
-                                );
-                              },
-                              style: IconButton.styleFrom(
-                                backgroundColor: Colors.grey[800],
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.all(12),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
               const ProfileScreen(),
