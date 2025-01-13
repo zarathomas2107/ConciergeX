@@ -1,0 +1,1 @@
+SELECT name, distance::int, cuisine_type, rating, price_level, vegetarian_scale FROM get_restaurants_within_distance_v3('POINT(-0.1240436 51.5116571)', 5000.0, ARRAY['CHINESE', 'FRENCH'], ARRAY['VEGETARIAN'], '2025-03-01', '2025-03-31', '19:00:00', '21:00:00') ORDER BY distance LIMIT 5;
