@@ -5,7 +5,7 @@ import 'dart:convert';
 class Restaurant {
   final String id;
   final String name;
-  final String cuisineType;
+  final List<String> cuisineTypes;
   final double rating;
   final String? address;
   final double latitude;
@@ -14,6 +14,7 @@ class Restaurant {
   final int? priceLevel;
   final String? area;
   final List<AvailabilitySlot>? availableSlots;
+  final String? vegetarianScale;
 
   String get photoUrl {
     try {
@@ -30,7 +31,7 @@ class Restaurant {
   Restaurant({
     required this.id,
     required this.name,
-    required this.cuisineType,
+    required this.cuisineTypes,
     required this.rating,
     this.address,
     required this.latitude,
@@ -39,6 +40,7 @@ class Restaurant {
     this.priceLevel,
     this.area,
     this.availableSlots,
+    this.vegetarianScale,
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
@@ -71,18 +73,31 @@ class Restaurant {
       slots = [];
     }
 
+    // Handle cuisine_type parsing with better null safety
+    List<String> parseCuisineTypes(dynamic cuisineType) {
+      if (cuisineType == null) return ['Unknown'];
+      if (cuisineType is List) {
+        return cuisineType.map((e) => e.toString()).toList();
+      }
+      if (cuisineType is String) {
+        return [cuisineType];
+      }
+      return ['Unknown'];
+    }
+
     return Restaurant(
       id: json['id'] as String,
       name: json['name'] as String,
       address: json['address'] as String?,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       priceLevel: json['price_level'] as int?,
-      cuisineType: json['cuisine_type'] as String? ?? 'Unknown',
+      cuisineTypes: parseCuisineTypes(json['cuisine_type']),
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       distance: (json['distance'] as num?)?.toDouble(),
       area: json['area'] as String?,
       availableSlots: slots,
+      vegetarianScale: json['vegetarian_scale'] as String?,
     );
   }
 
@@ -92,7 +107,7 @@ class Restaurant {
     return {
       'id': id,
       'name': name,
-      'cuisine_type': cuisineType,
+      'cuisine_type': cuisineTypes.isEmpty ? ['Unknown'] : cuisineTypes,
       'rating': rating,
       'address': address,
       'latitude': latitude,

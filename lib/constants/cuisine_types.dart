@@ -9,16 +9,21 @@ class CuisineTypes {
       try {
         final response = await _supabase
             .from('restaurants')
-            .select('CuisineType')
-            .not('CuisineType', 'is', null);
+            .select('cuisine_type');
 
         final cuisines = response as List<dynamic>;
-        _cuisineTypes = cuisines
-            .map((r) => r['CuisineType'] as String)
-            .toSet() // Remove duplicates
-            .toList()
-            ..sort(); // Sort alphabetically
+        final allCuisineTypes = <String>{};
+        
+        // Extract all unique cuisine types from the arrays
+        for (var restaurant in cuisines) {
+          if (restaurant['cuisine_type'] != null) {
+            final types = (restaurant['cuisine_type'] as List<dynamic>)
+                .map((e) => e.toString());
+            allCuisineTypes.addAll(types);
+          }
+        }
 
+        _cuisineTypes = allCuisineTypes.toList()..sort();
         print('Loaded ${_cuisineTypes.length} cuisine types from database');
       } catch (e) {
         print('Error loading cuisine types: $e');

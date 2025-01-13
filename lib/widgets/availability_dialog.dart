@@ -66,7 +66,7 @@ class _AvailabilityDialogState extends State<AvailabilityDialog> {
                         ),
                       ),
                       Text(
-                        widget.restaurant.cuisineType,
+                        widget.restaurant.cuisineTypes.join(' • '),
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],

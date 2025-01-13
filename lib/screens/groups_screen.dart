@@ -209,60 +209,69 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       ],
                     ),
                     children: [
-                      FutureBuilder<List<Map<String, dynamic>>>(
-                        future: _loadMemberDetails(group.memberIds),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: Text('No members'),
-                            );
-                          }
-                          return Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  TextButton.icon(
-                                    onPressed: () => _addMember(group),
-                                    icon: const Icon(Icons.person_add),
-                                    label: const Text('Add Member'),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: FutureBuilder<List<Map<String, dynamic>>>(
+                          future: _loadMemberDetails(group.memberIds),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return const Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text('No members'),
+                              );
+                            }
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0, bottom: 8.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      TextButton.icon(
+                                        onPressed: () => _addMember(group),
+                                        icon: const Icon(Icons.person_add),
+                                        label: const Text('Add Member'),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              ...snapshot.data!.map((member) => ListTile(
-                                title: Text(
-                                  '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
-                                  style: Theme.of(context).textTheme.titleMedium,
                                 ),
-                                subtitle: member['email'] != null 
-                                  ? Text(member['email']) 
-                                  : null,
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () {
-                                        final groupMember = GroupMember(
-                                          id: member['id'],
-                                          name: '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
-                                          dietaryRequirements: List<String>.from(member['dietary_requirements'] ?? []),
-                                          restaurantPreferences: List<String>.from(member['restaurant_preferences'] ?? []),
-                                          locationPreferences: List<String>.from(member['location_preferences'] ?? []),
-                                        );
-                                        _editMemberPreferences(group, groupMember);
-                                      },
+                                ...snapshot.data!.map((member) => Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                  child: ListTile(
+                                    title: Text(
+                                      '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
+                                      style: Theme.of(context).textTheme.titleMedium,
                                     ),
-                                  ],
-                                ),
-                              )).toList(),
-                            ],
-                          );
-                        },
+                                    subtitle: member['email'] != null 
+                                      ? Text(member['email']) 
+                                      : null,
+                                    trailing: SizedBox(
+                                      width: 48,  // Fixed width for single icon
+                                      child: IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () {
+                                          final groupMember = GroupMember(
+                                            id: member['id'],
+                                            name: member['first_name'] + ' ' + (member['last_name'] ?? ''),
+                                            dietaryRequirements: List<String>.from(member['dietary_requirements'] ?? []),
+                                            restaurantPreferences: List<String>.from(member['restaurant_preferences'] ?? []),
+                                            locationPreferences: List<String>.from(member['location_preferences'] ?? []),
+                                            excludedCuisines: List<String>.from(member['excluded_cuisines'] ?? []),
+                                          );
+                                          _editMemberPreferences(group, groupMember);
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                )).toList(),
+                              ],
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ),

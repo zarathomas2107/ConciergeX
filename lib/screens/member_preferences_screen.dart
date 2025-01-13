@@ -28,40 +28,59 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
   
   // Define available options
   final List<String> _availableDietaryRequirements = [
-    'vegetarian',
-    'vegan',
-    'pescatarian',
-    'halal',
-    'kosher',
-    'gluten_free',
-    'dairy_free',
-    'nut_free',
-    'shellfish_allergy',
-    'no_beef',
-    'no_pork'
+    'Vegetarian',
+    'Vegan',
+    'Pescatarian',
+    'Halal',
+    'Kosher',
+    'Gluten Free',
+    'Dairy Free',
+    'Nut Free',
+    'Shellfish_allergy',
+    'No Beef',
+    'No Pork',
   ];
 
   final List<String> _availableRestaurantPreferences = [
-    'Dog_Friendly',
-    'Business_Meals',
+   'Dog_Friendly',
+    'Business Meals',
     'Birthdays',
-    'Date_Nights',
-    'Pre_Theatre',
-    'Cheap_Eat',
-    'Fine_Dining',
-    'Family_Friendly',
+    'Date Nights',
+    'Pre Theatre',
+    'Cheap Eat',
+    'Fine Dining',
+    'Family Friendly',
     'Solo',
     'Bar',
-    'Casual_Dinner',
+    'Casual Dinner',
     'Brunch',
     'Breakfast',
     'Lunch',
     'Dinner',
   ];
 
+  final List<String> _availableCuisines = [
+    'Italian',
+    'Japanese',
+    'Chinese',
+    'Indian',
+    'French',
+    'Thai',
+    'Mexican',
+    'Mediterranean',
+    'British',
+    'American',
+    'Korean',
+    'Vietnamese',
+    'Spanish',
+    'Greek',
+    'Turkish',
+  ];
+
   // Store selected preferences
   List<String> _selectedDietaryRequirements = [];
   List<String> _selectedRestaurantPreferences = [];
+  List<String> _excludedCuisines = [];
   List<String> _otherRequirements = [];
   List<String> _otherRestaurantPreferences = [];
   List<String> _locationPreferences = [];
@@ -69,6 +88,7 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
   bool _isDietaryExpanded = false;
   bool _isRestaurantExpanded = false;
   bool _isLocationExpanded = false;
+  bool _isCuisineExpanded = false;
 
   @override
   void initState() {
@@ -116,6 +136,7 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
       _selectedDietaryRequirements = List<String>.from(widget.member.dietaryRequirements);
       _selectedRestaurantPreferences = List<String>.from(widget.member.restaurantPreferences);
       _locationPreferences = List<String>.from(widget.member.locationPreferences);
+      _excludedCuisines = List<String>.from(widget.member.excludedCuisines);
 
       // Separate standard and other requirements
       _otherRequirements = _selectedDietaryRequirements
@@ -153,10 +174,12 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
         ..._otherRestaurantPreferences,
       ];
 
-      await _supabase.from('group_members').update({
+      // Update all preferences in the profiles table
+      await _supabase.from('profiles').update({
         'dietary_requirements': allDietaryRequirements,
         'restaurant_preferences': allRestaurantPreferences,
         'location_preferences': _locationPreferences,
+        'excluded_cuisines': _excludedCuisines,
       }).eq('id', widget.member.id);
 
       if (mounted) {
@@ -180,6 +203,11 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
         elevation: 0,
         title: Text(widget.member.name),
         actions: [
+          // Save button
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: _savePreferences,
+          ),
           // Show remove button if:
           // 1. Current user is the creator and not removing themselves
           // 2. Current user is removing themselves
@@ -306,6 +334,48 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
                             const SizedBox(height: 24),
                             _buildOtherRestaurantPreferencesSection(),
                           ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: ExpansionTile(
+                    title: const Text(
+                      'Excluded Cuisines',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    initiallyExpanded: _isCuisineExpanded,
+                    onExpansionChanged: (expanded) {
+                      setState(() => _isCuisineExpanded = expanded);
+                    },
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _availableCuisines.map((cuisine) {
+                            return FilterChip(
+                              label: Text(cuisine.toTitleCase()),
+                              selected: _excludedCuisines.contains(cuisine),
+                              selectedColor: Colors.black.withOpacity(0.15),
+                              checkmarkColor: Colors.white,
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _excludedCuisines.add(cuisine);
+                                  } else {
+                                    _excludedCuisines.remove(cuisine);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
                         ),
                       ),
                     ],

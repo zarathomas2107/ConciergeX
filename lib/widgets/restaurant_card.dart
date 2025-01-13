@@ -93,83 +93,95 @@ class RestaurantCard extends StatelessWidget {
               child: Container(
                 height: 400,
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Restaurant name and price section
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            restaurant.name,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontSize: 18,
-                              height: 1.2,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Restaurant name and price section
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              restaurant.name,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontSize: 18,
+                                height: 1.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 2,
                           ),
+                          const SizedBox(width: 8),
+                          Text(
+                            restaurant.getPriceLevel(),
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Cuisine type
+                      Text(
+                        restaurant.cuisineTypes.join(' • '),
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 8),
+                      if (restaurant.cuisineTypes.contains('Vegetarian') &&
+                          restaurant.vegetarianScale != null &&
+                          restaurant.vegetarianScale != 'Unknown')
+                        Row(
+                          children: [
+                            const Icon(Icons.eco, color: Colors.green, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Veg Score: ${restaurant.vegetarianScale}',
+                              style: const TextStyle(
+                                color: Colors.green,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          restaurant.getPriceLevel(),
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Cuisine type
-                    Text(
-                      restaurant.cuisineType,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    // Bottom section for location, rating and distance
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Location on the left
-                        if (restaurant.area != null && restaurant.area!.isNotEmpty)
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
                           Expanded(
                             child: Row(
                               children: [
-                                const Icon(Icons.location_on_outlined, size: 16),
+                                const Icon(Icons.location_on, size: 16),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    restaurant.area!,
+                                    restaurant.area ?? 'Unknown location',
                                     style: Theme.of(context).textTheme.bodySmall,
                                     overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        // Rating and distance on the right
-                        Row(
-                          children: [
-                            const Icon(Icons.star, size: 16, color: Colors.amber),
-                            const SizedBox(width: 4),
-                            Text(
-                              restaurant.rating.toStringAsFixed(1),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            if (restaurant.distance != null) ...[
-                              const SizedBox(width: 16),
+                          Row(
+                            children: [
+                              const Icon(Icons.star, size: 16, color: Colors.amber),
+                              const SizedBox(width: 4),
                               Text(
-                                '${(restaurant.distance! / 1000).toStringAsFixed(1)}km',
+                                restaurant.rating.toStringAsFixed(1),
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Distance at the bottom
+                      if (restaurant.distance != null)
+                        Text(
+                          '${(restaurant.distance! / 1000).toStringAsFixed(1)}km',
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

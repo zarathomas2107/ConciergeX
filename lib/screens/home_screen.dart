@@ -80,8 +80,8 @@ class HomeScreenState extends State<HomeScreen> {
                   infoWindow: InfoWindow(
                     title: restaurant.name,
                     snippet: restaurant.distance != null 
-                        ? '${restaurant.cuisineType} • ${(restaurant.distance! / 1000).toStringAsFixed(1)}km'
-                        : restaurant.cuisineType,
+                        ? '${restaurant.cuisineTypes.join(' • ')} • ${(restaurant.distance! / 1000).toStringAsFixed(1)}km'
+                        : restaurant.cuisineTypes.join(' • '),
                   ),
                 ),
               );
@@ -166,71 +166,47 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _updateMap() async {
-    if (_mapController == null || !_showMap) return;
+    if (_mapController == null) return;
 
-    try {
-      setState(() {
-        _markers.clear();
-      });
-
-      // Add venue marker
-      if (_venueLat != 0 && _venueLon != 0) {
-        final venueMarker = await _createVenueMarker();
-        _markers.add(
-          Marker(
-            markerId: const MarkerId('venue'),
-            position: LatLng(_venueLat, _venueLon),
-            icon: venueMarker,
-            anchor: const Offset(0.5, 0.5),
-            infoWindow: const InfoWindow(title: 'Selected Location'),
-          ),
-        );
-      }
-
-      // Add restaurant markers
-      for (final restaurant in _filteredRestaurants) {
-        if (restaurant.latitude != 0 && restaurant.longitude != 0) {
-          final customMarker = await _createCustomMarker(restaurant.name);
-          _markers.add(
-            Marker(
-              markerId: MarkerId(restaurant.id),
-              position: LatLng(restaurant.latitude, restaurant.longitude),
-              icon: customMarker,
-              anchor: const Offset(0.5, 0.5),
-              infoWindow: InfoWindow(
-                title: restaurant.name,
-                snippet: restaurant.distance != null 
-                    ? '${restaurant.cuisineType} • ${(restaurant.distance! / 1000).toStringAsFixed(1)}km'
-                    : restaurant.cuisineType,
+    setState(() {
+      _markers.clear();
+    });
+      
+    // Use filtered restaurants if search has been performed, otherwise show all restaurants
+    final restaurantsToShow = _hasSearched ? _filteredRestaurants : _restaurants;
+    
+    for (final restaurant in restaurantsToShow) {
+      if (restaurant.latitude != 0 && restaurant.longitude != 0) {
+        final customMarker = await _createCustomMarker(restaurant.name);
+        if (mounted) {
+          setState(() {
+            _markers.add(
+              Marker(
+                markerId: MarkerId(restaurant.id),
+                position: LatLng(restaurant.latitude, restaurant.longitude),
+                icon: customMarker,
+                anchor: const Offset(0.5, 0.5),
+                infoWindow: InfoWindow(
+                  title: restaurant.name,
+                  snippet: restaurant.distance != null 
+                      ? '${restaurant.cuisineTypes.join(' • ')} • ${(restaurant.distance! / 1000).toStringAsFixed(1)}km'
+                      : restaurant.cuisineTypes.join(' • '),
+                ),
+                onTap: () {
+                  final index = restaurantsToShow.indexOf(restaurant);
+                  if (index != -1) {
+                    _scrollController.animateTo(
+                      index * (MediaQuery.of(context).size.width * 0.95 + 16),
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                },
               ),
-              onTap: () {
-                final index = _filteredRestaurants.indexOf(restaurant);
-                if (index != -1) {
-                  _scrollController.animateTo(
-                    index * (MediaQuery.of(context).size.width * 0.95 + 16),
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
-                }
-              },
-            ),
-          );
+            );
+          });
         }
       }
-
-      // Update camera position
-      if (_venueLat != 0 && _venueLon != 0) {
-        await _mapController?.animateCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: LatLng(_venueLat, _venueLon),
-              zoom: 14.0,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error updating map: $e');
     }
   }
 
@@ -253,46 +229,46 @@ class HomeScreenState extends State<HomeScreen> {
             final startDateStr = datetime['start_date'] as String?;
             final endDateStr = datetime['end_date'] as String?;
             
-            debugPrint('Raw datetime values:');
-            debugPrint('  start_date: $startDateStr');
-            debugPrint('  end_date: $endDateStr');
-            debugPrint('  start_time: $startTimeStr');
-            debugPrint('  end_time: $endTimeStr');
-            
-            if (startDateStr != null) {
-              _currentStartDate = DateTime.parse(startDateStr);
+            if (startTimeStr != null && endTimeStr != null) {
+              // Parse time strings in format HH:MM:SS
+              final startTimeParts = startTimeStr.split(':');
+              final endTimeParts = endTimeStr.split(':');
+              
+              _currentStartTime = TimeOfDay(
+                hour: int.parse(startTimeParts[0]),
+                minute: int.parse(startTimeParts[1]),
+              );
+              
+              _currentEndTime = TimeOfDay(
+                hour: int.parse(endTimeParts[0]),
+                minute: int.parse(endTimeParts[1]),
+              );
             }
-            if (endDateStr != null) {
+            
+            if (startDateStr != null && endDateStr != null) {
+              _currentStartDate = DateTime.parse(startDateStr);
               _currentEndDate = DateTime.parse(endDateStr);
             }
-            if (startTimeStr != null) {
-              final parts = startTimeStr.split(':');
-              _currentStartTime = TimeOfDay(
-                hour: int.parse(parts[0]),
-                minute: int.parse(parts[1])
-              );
-            }
-            if (endTimeStr != null) {
-              final parts = endTimeStr.split(':');
-              _currentEndTime = TimeOfDay(
-                hour: int.parse(parts[0]),
-                minute: int.parse(parts[1])
-              );
-            }
             
-            debugPrint('Parsed datetime values:');
+            debugPrint('Updated datetime parameters:');
             debugPrint('  start_date: $_currentStartDate');
             debugPrint('  end_date: $_currentEndDate');
             debugPrint('  start_time: ${_currentStartTime?.format(context)}');
             debugPrint('  end_time: ${_currentEndTime?.format(context)}');
           }
         });
+        
+        // Update map markers to show only filtered restaurants
+        _updateMap();
       } else {
         setState(() {
           _filteredRestaurants = [];
           _isSearching = false;
           _hasSearched = true;
         });
+        
+        // Clear all restaurant markers when no results
+        _updateMap();
       }
     } catch (e) {
       debugPrint('Error filtering restaurants: $e');
@@ -301,6 +277,9 @@ class HomeScreenState extends State<HomeScreen> {
         _isSearching = false;
         _hasSearched = true;
       });
+      
+      // Clear all restaurant markers on error
+      _updateMap();
     }
   }
 
@@ -450,7 +429,7 @@ class HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(8),
             child: Container(
               constraints: BoxConstraints(
-                maxHeight: 200,
+                maxHeight: 400,
               ),
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
@@ -506,6 +485,7 @@ class HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           GoogleMap(
+            key: const ValueKey<String>('google_map'),
             onMapCreated: _onMapCreated,
             initialCameraPosition: _initialCameraPosition,
             markers: _markers,
@@ -524,7 +504,7 @@ class HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  height: 130,
+                  height: 150,
                   child: SingleChildScrollView(
                     controller: _scrollController,
                     scrollDirection: Axis.horizontal,
@@ -571,6 +551,9 @@ class HomeScreenState extends State<HomeScreen> {
                     link: _layerLink,
                     child: TextField(
                       controller: _searchController,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.done,
                       decoration: InputDecoration(
                         hintText: 'Search restaurants...',
                         filled: true,
@@ -586,7 +569,6 @@ class HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       onSubmitted: _search,
-                      textInputAction: TextInputAction.search,
                     ),
                   ),
                 ),
@@ -601,9 +583,14 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _mapController?.dispose();
+    if (_mapController != null) {
+      _mapController!.dispose();
+      _mapController = null;
+    }
     _scrollController.dispose();
     _hideGroupSuggestions();
+    _overlayEntry?.remove();
+    _overlayEntry = null;
     super.dispose();
   }
 }

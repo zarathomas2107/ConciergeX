@@ -27,15 +27,17 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   
   // Define available options
   final List<String> _availableDietaryRequirements = [
-    'vegetarian',
-    'vegan',
-    'pescatarian',
-    'halal',
-    'kosher',
-    'gluten_free',
-    'dairy_free',
-    'nut_free',
-    'shellfish_allergy',
+    'Vegetarian',
+    'Vegan',
+    'Pescatarian',
+    'Halal',
+    'Kosher',
+    'Gluten Free',
+    'Dairy Free',
+    'Nut Free',
+    'Shellfish_allergy',
+    'No Beef',
+    'No Pork',
   ];
 
   final List<String> _availableRestaurantPreferences = [

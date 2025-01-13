@@ -97,14 +97,29 @@ class _SearchScreenState extends State<SearchScreen> {
       ) : const TimeOfDay(hour: 22, minute: 0);
       debugPrint('Final TimeOfDay - Start: ${startTime.format(context)}, End: ${endTime.format(context)}');
 
+      // Format times in HH24:MI:SS format
+      final startTimeStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
+      final endTimeStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
+
       // Get excluded cuisines
       List<String> excludedCuisines = [];
-      if (params['excluded_cuisines'] != null) {
-        var excluded = params['excluded_cuisines'];
+      if (params['preferences']['excluded_cuisines'] != null) {
+        var excluded = params['preferences']['excluded_cuisines'];
         if (excluded is List) {
-          excludedCuisines.addAll(List<String>.from(excluded));
+          excludedCuisines = List<String>.from(excluded.map((e) => e.toString()));
         } else if (excluded is String) {
-          excludedCuisines.add(excluded);
+          excludedCuisines = [excluded];
+        }
+      }
+
+      // Get required cuisines
+      List<String> requiredCuisines = [];
+      if (params['preferences']['cuisine_types'] != null) {
+        var required = params['preferences']['cuisine_types'];
+        if (required is List) {
+          requiredCuisines = List<String>.from(required.map((e) => e.toString()));
+        } else if (required is String) {
+          requiredCuisines = [required];
         }
       }
 
@@ -112,15 +127,29 @@ class _SearchScreenState extends State<SearchScreen> {
         'VyTA Covent Garden',  // Default venue
         5000.0,  // 5km radius
         excludedCuisines,
+        requiredCuisines,
         startDate,
         endDate,
-        startTime,
-        endTime,
+        startTimeStr,
+        endTimeStr,
       );
       
+      // Filter out restaurants with any excluded cuisines
+      final filteredResults = results.where((restaurant) {
+        // If there are no excluded cuisines, include the restaurant
+        if (excludedCuisines.isEmpty) return true;
+        
+        // Check if any of the restaurant's cuisines match any excluded cuisine
+        return !restaurant.cuisineTypes.any((cuisine) => 
+          excludedCuisines.any((excluded) => 
+            cuisine.toLowerCase().contains(excluded.toLowerCase())
+          )
+        );
+      }).toList();
+      
       setState(() {
-        _restaurants = results;
-        if (results.isEmpty) {
+        _restaurants = filteredResults;
+        if (filteredResults.isEmpty) {
           _chatHistory.add({
             'message': 'No restaurants found matching your criteria.',
             'sender': 'assistant',
@@ -216,6 +245,9 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
                       child: TextField(
                         controller: _searchController,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
                           hintText: 'Search restaurants...',
                           border: InputBorder.none,

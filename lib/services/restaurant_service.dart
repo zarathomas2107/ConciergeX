@@ -86,18 +86,53 @@ class RestaurantService {
       final refPoint = 'POINT(${venueResponse['longitude']} ${venueResponse['latitude']})';
       debugPrint('Venue coordinates: $refPoint');
 
+      // Get required cuisines from search params, if any specific restaurants were requested
+      final requiredCuisines = (searchParams['required_cuisines'] as List<dynamic>?)
+          ?.where((cuisine) => cuisine != null && cuisine.toString().isNotEmpty)
+          .map((e) => e.toString())
+          .toList() ?? [];
+      debugPrint('Required cuisines: $requiredCuisines');
+
+      // Get excluded cuisines - these should always be applied
+      final excludedCuisines = (searchParams['excluded_cuisines'] as List<dynamic>?)
+          ?.where((cuisine) => cuisine != null && cuisine.toString().isNotEmpty)
+          .map((e) => e.toString())
+          .toList() ?? [];
+      debugPrint('Excluded cuisines: $excludedCuisines');
+
+      // Get dietary requirements
+      final dietaryRequirements = (searchParams['dietary_requirements'] as List<dynamic>?)
+          ?.where((requirement) => requirement != null && requirement.toString().isNotEmpty)
+          .map((e) => e.toString())
+          .toList() ?? [];
+      debugPrint('Dietary requirements: $dietaryRequirements');
+
+      // Debug print to log RPC parameters
+      debugPrint('RPC Parameters:');
+      debugPrint('ref_point: $refPoint');
+      debugPrint('max_distance: 5000.0');
+      debugPrint('excluded_cuisines: $excludedCuisines');
+      debugPrint('required_cuisines: $requiredCuisines');
+      debugPrint('start_date: ${searchParams['datetime']['start_date']}');
+      debugPrint('end_date: ${searchParams['datetime']['end_date']}');
+      debugPrint('start_time: ${searchParams['datetime']['start_time']}:00');
+      debugPrint('end_time: ${searchParams['datetime']['end_time']}:00');
+
       final data = await _serviceClient.rpc(
         'get_restaurants_within_distance_v2',
         params: {
           'ref_point': refPoint,
           'max_distance': 5000.0,
-          'excluded_cuisines': searchParams['preferences']['excluded_cuisines'],
+          'excluded_cuisines': excludedCuisines,
+          'required_cuisines': requiredCuisines,
           'start_date_str': searchParams['datetime']['start_date'],
           'end_date_str': searchParams['datetime']['end_date'],
           'start_time_str': '${searchParams['datetime']['start_time']}:00',
           'end_time_str': '${searchParams['datetime']['end_time']}:00',
         },
       );
+
+      debugPrint('$data');
 
       if (data == null) {
         return SearchResponse(
@@ -108,11 +143,20 @@ class RestaurantService {
         );
       }
 
+      // Convert restaurants and apply excluded cuisines filter
       final restaurants = (data as List<dynamic>)
           .map((data) => Restaurant.fromJson(data))
+          .where((restaurant) {
+            // Always apply excluded cuisines filter
+            return !restaurant.cuisineTypes.any((cuisine) => 
+              excludedCuisines.any((excluded) => 
+                cuisine.toLowerCase().contains(excluded.toLowerCase())
+              )
+            );
+          })
           .toList();
 
-      debugPrint('Found ${restaurants.length} restaurants matching criteria');
+      debugPrint('Found ${restaurants.length} restaurants after cuisine filtering');
 
       return SearchResponse(
         restaurants: restaurants,
@@ -140,9 +184,20 @@ class RestaurantService {
           });
       
       debugPrint('Got response from get_group_members_preferences: $response');
-      final groups = List<Map<String, dynamic>>.from(response);
-      debugPrint('Parsed groups: $groups');
-      return groups;
+      
+      if (response is List) {
+        return List<Map<String, dynamic>>.from(response);
+      } else if (response is Map) {
+        // If response is a Map with data field
+        final data = response['data'];
+        if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
+      }
+      
+      // Return empty list if response format is unexpected
+      debugPrint('Unexpected response format: $response');
+      return [];
     } catch (e, stackTrace) {
       debugPrint('Error getting available groups: $e');
       debugPrint('Stack trace: $stackTrace');
