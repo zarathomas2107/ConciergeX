@@ -1,0 +1,64 @@
+steps:
+# Build the container image
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'build'
+  args: ['build', '-t', 'europe-west2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/restaurant-search-api', '.']
+
+# Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'push'
+  args: ['push', 'europe-west2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/restaurant-search-api']
+  waitFor: ['build']
+
+# Deploy container image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  id: 'deploy'
+  entrypoint: 'gcloud'
+  args:
+    - 'run'
+    - 'deploy'
+    - 'restaurant-search-api'
+    - '--image'
+    - 'europe-west2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/restaurant-search-api'
+    - '--region'
+    - 'europe-west2'
+    - '--platform'
+    - 'managed'
+    - '--allow-unauthenticated'
+    - '--memory'
+    - '1Gi'
+    - '--cpu'
+    - '1'
+    - '--min-instances'
+    - '0'
+    - '--max-instances'
+    - '10'
+    - '--port'
+    - '8080'
+    - '--timeout'
+    - '3600'
+    - '--set-env-vars'
+    - 'OPENAI_API_KEY=${_OPENAI_API_KEY},SUPABASE_URL=${_SUPABASE_URL},SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY},GOOGLE_API_KEY=${_GOOGLE_PLACES_API_KEY},GOOGLE_PROJECT_ID=$PROJECT_ID'
+    - '--execution-environment'
+    - 'gen2'
+    - '--service-account'
+    - '378538476539-compute@developer.gserviceaccount.com'
+  waitFor: ['push']
+
+# Configure the build environment
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Environment variables will be loaded from .env file
+substitutions:
+  _OPENAI_API_KEY: ""
+  _SUPABASE_URL: ""
+  _SUPABASE_ANON_KEY: ""
+  _GOOGLE_PLACES_API_KEY: ""
+
+# Define the container image to be built
+images:
+  - 'europe-west2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/restaurant-search-api'
+
+# Set a timeout for the entire build
+timeout: '3600s' 

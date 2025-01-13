@@ -1,10 +1,17 @@
-import logging
-from datetime import datetime, timedelta
-from typing import Dict, Any
-import aiohttp
+import os
+import sys
 import json
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+import aiohttp
 import asyncio
-from search_service.clients.openai_client import OpenAIClient
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from clients.openai_client import OpenAIClient
+
+import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,36 +45,89 @@ class DateTimeAgent:
         # System prompt for datetime extraction
         self.system_prompt = """
             You are a datetime extraction specialist. Your task is to extract date and time information from user queries.
+            The current timestamp will be provided by the get_current_time() function - use this as the reference point for all date calculations.
 
 Format your response as a valid JSON object with these REQUIRED fields:
 {
-    "start_date": "YYYY-MM-DD",  // REQUIRED: Must be filled from appropriate tool
-    "end_date": "YYYY-MM-DD",    // REQUIRED: Must be filled from appropriate tool
+    "start_date": "YYYY-MM-DD",  // REQUIRED: Must be filled from appropriate tool and be >= current date
+    "end_date": "YYYY-MM-DD",    // REQUIRED: Must be filled from appropriate tool and be >= start_date
     "start_time": "HH:MM",       // REQUIRED: Use empty string if not specified
     "end_time": "HH:MM",         // REQUIRED: Use empty string if not specified
-    "day_context": "string",     // REQUIRED: today/tonight/tomorrow/next week/this weekend/next weekend/this month/monday/tuesday/etc.
+    "day_context": "string",     // REQUIRED: today/tonight/tomorrow/next week/this weekend/next weekend/this month/next month/january/february/etc.
     "time_context": "string"     // REQUIRED: breakfast/lunch/dinner/brunch/meeting/morning/afternoon/evening/empty string
 }  
 
 IMPORTANT RULES:
 1. ALL fields must be included in the response
-2. start_date and end_date must ALWAYS be filled
-3. For time ranges, use EXACTLY these standard durations:
+2. start_date and end_date must ALWAYS be filled and MUST be >= current date from get_current_time()
+3. ALL dates must be in the future relative to get_current_time(). If a date would be in the past:
+   - For month queries: use the same month next year
+   - For day queries: use the next occurrence of that day
+   - For generic queries: use the next valid date
+   - For time-specific queries on the current day: if the time has passed, move to tomorrow
+4. For time ranges, use EXACTLY these standard durations:
    - For breakfast/morning: start="07:00", end="10:00" (3 hours)
    - For brunch: start="10:30", end="13:00" (2.5 hours)
    - For lunch/afternoon: start="12:00", end="14:00" (2 hours)
    - For dinner/evening/night: start="19:00", end="21:00" (2 hours)
    - For meetings: use 2 hour duration from specified start time
-4. Return ONLY the JSON object, no comments or explanations
+5. For month-based queries (e.g. "Dinner in March"):
+   - Set day_context to the month name (e.g. "march")
+   - Use standard dinner time (19:00-21:00) if no specific time given
+   - Set start_date to the first day of the month
+   - Set end_date to the last day of the month
+   - If the month has already passed this year (based on get_current_time()), use next year
+6. For queries with NO date information (e.g. "Restaurants near Covent Garden"):
+   - Set day_context to "this month"
+   - Set start_date to current date from get_current_time()
+   - Set end_date to the last day of the current month
+   - If current month is ending soon (less than 7 days left), use next month
+   - If time_context is empty and current time (from get_current_time()) is:
+     * Before 11:00: assume breakfast/morning (07:00-10:00)
+     * 11:00-14:00: assume lunch/afternoon (12:00-14:00)
+     * After 14:00: assume dinner/evening (19:00-21:00)
+   - If the specified time has already passed today, use tomorrow's date
+7. For availability queries (e.g. "What's available", "Show availability"):
+   - Set day_context to "this month"
+   - Set start_date to current date from get_current_time()
+   - Set end_date to the last day of the current month
+   - If current month is ending soon (less than 7 days left), use next month
+   - Leave time_context empty unless specifically mentioned
+   - Leave start_time and end_time empty unless specifically mentioned
+8. Return ONLY the JSON object, no comments or explanations
+
+Example for "Dinner in March" (assuming current date from get_current_time() is January 2024):
+{
+    "start_date": "2024-03-01",
+    "end_date": "2024-03-31",
+    "start_time": "19:00",
+    "end_time": "21:00",
+    "day_context": "march",
+    "time_context": "dinner"
+}
+
+Example for "Restaurants near Covent Garden" (assuming current date from get_current_time() is January 25, 2024, 15:00):
+{
+    "start_date": "2024-01-25",
+    "end_date": "2024-01-31",
+    "start_time": "19:00",
+    "end_time": "21:00",
+    "day_context": "this month",
+    "time_context": "dinner"
+}
 """
 
-    def get_current_time(self) -> int:
-        """Returns current Unix timestamp in seconds"""
-        return int(datetime.now().timestamp())
+    def get_current_time(self) -> datetime:
+        """Returns current datetime object"""
+        return datetime.now()
+
+    def get_current_date_str(self) -> str:
+        """Returns current date in YYYY-MM-DD format"""
+        return datetime.now().strftime('%Y-%m-%d')
 
     def get_next_weekend(self) -> Dict[str, str]:
         """Returns dictionary with next weekend's dates"""
-        today = datetime.now()
+        today = self.get_current_time()
         # Calculate days until next Saturday
         days_until_saturday = (5 - today.weekday()) % 7
         if days_until_saturday == 0 and today.hour >= 0:  # If it's already Saturday
@@ -87,7 +147,7 @@ IMPORTANT RULES:
 
     def get_this_weekend(self) -> Dict[str, str]:
         """Returns dictionary with this weekend's dates"""
-        today = datetime.now()
+        today = self.get_current_time()
         # Calculate days until this Saturday
         days_until_saturday = (5 - today.weekday()) % 7
         if days_until_saturday == 0 and today.hour >= 0:  # If it's already Saturday
@@ -105,7 +165,7 @@ IMPORTANT RULES:
 
     def get_tonight(self) -> Dict[str, str]:
         """Returns dictionary with tonight's date"""
-        today = datetime.now()
+        today = self.get_current_time()
         return {
             'start_date': today.strftime('%Y-%m-%d'),
             'end_date': today.strftime('%Y-%m-%d')
@@ -113,7 +173,7 @@ IMPORTANT RULES:
 
     def get_tomorrow(self) -> Dict[str, str]:
         """Returns dictionary with tomorrow's date"""
-        tomorrow = datetime.now() + timedelta(days=1)
+        tomorrow = self.get_current_time() + timedelta(days=1)
         return {
             'start_date': tomorrow.strftime('%Y-%m-%d'),
             'end_date': tomorrow.strftime('%Y-%m-%d')
@@ -212,7 +272,7 @@ IMPORTANT RULES:
 
     def get_month_dates(self, month_name: str) -> Dict[str, str]:
         """Returns dictionary with start and end dates for a given month."""
-        current_date = datetime.now()
+        current_date = self.get_current_time()
         month_map = {
             'january': 1, 'february': 2, 'march': 3, 'april': 4,
             'may': 5, 'june': 6, 'july': 7, 'august': 8,
@@ -222,8 +282,8 @@ IMPORTANT RULES:
         target_month = month_map[month_name.lower()]
         target_year = current_date.year
         
-        # If the target month is earlier than current month, use next year
-        if target_month < current_date.month:
+        # If the target month is earlier than or equal to current month, use next year
+        if target_month <= current_date.month:
             target_year += 1
             
         # Get the last day of the month
@@ -241,8 +301,12 @@ IMPORTANT RULES:
     async def process_query(self, query: str) -> Dict[str, Any]:
         """Process a query to extract datetime information."""
         try:
+            # Add current date to the prompt
+            current_date = self.get_current_time()
+            prompt_with_date = f"Current date and time is {current_date.strftime('%Y-%m-%d %H:%M')}. Query: {query}"
+            
             response = await self.openai_client.get_completion(
-                prompt=query,
+                prompt=prompt_with_date,
                 system_prompt=self.system_prompt
             )
             
@@ -265,20 +329,35 @@ IMPORTANT RULES:
                 dates = self.get_tomorrow()
             elif "next week" in day_context:
                 dates = self.get_next_week()
+            elif any(month in day_context.lower() for month in ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]):
+                # Extract the month name from context
+                for month in ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]:
+                    if month in day_context.lower():
+                        dates = self.get_month_dates(month)
+                        break
             elif any(day in day_context.lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
                 # Extract the day name from context
                 for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
                     if day in day_context.lower():
                         dates = self.get_specific_day(day)
                         break
-            elif "this month" in day_context:
-                # Check if a specific month is mentioned in the query
-                months = ["january", "february", "march", "april", "may", "june", 
-                         "july", "august", "september", "october", "november", "december"]
-                for month in months:
-                    if month in query.lower():
-                        dates = self.get_month_dates(month)
-                        break
+            else:
+                # Default to current month
+                current_month = current_date.strftime("%B").lower()
+                current_year = current_date.year
+                
+                # Calculate month end date
+                if current_date.month == 12:
+                    next_month = datetime(current_year + 1, 1, 1)
+                else:
+                    next_month = datetime(current_year, current_date.month + 1, 1)
+                last_day = (next_month - timedelta(days=1)).day
+                
+                # Set dates
+                dates = {
+                    'start_date': current_date.strftime('%Y-%m-%d'),
+                    'end_date': datetime(current_year, current_date.month, last_day).strftime('%Y-%m-%d')
+                }
             
             # Create response with dates
             response = {
@@ -333,7 +412,9 @@ if __name__ == '__main__':
                     "Dinner with friends tonight",
                     "Coffee tomorrow morning at 10:30",
                     "Dinner in March",
-                    "Italian restaurant near Soho with @family in February"
+                    "Restaurants near Covent Garden",
+                    "Italian restaurant near Soho with @family in February",
+                    "Chinese restaurant near Excel in London in February 2025"
                 ]
                 for query in test_queries:
                     print("\nTesting query:", query)

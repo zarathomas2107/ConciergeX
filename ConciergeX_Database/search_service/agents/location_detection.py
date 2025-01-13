@@ -1,11 +1,18 @@
+import os
+import sys
+import json
+from typing import Dict, Any, List, Optional
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import logging
 import aiohttp
-from typing import List, Dict
 from dotenv import load_dotenv
 
-from search_service.clients.openai_client import OpenAIClient
-from search_service.clients.supabase_client import SupabaseClient
-from search_service.clients.google import GoogleClient
+from clients.openai_client import OpenAIClient
+from clients.supabase_client import SupabaseClient
+from clients.google import GoogleClient
 
 # Load environment variables and configure logging
 load_dotenv()

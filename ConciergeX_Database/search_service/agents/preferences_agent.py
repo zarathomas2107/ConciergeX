@@ -1,21 +1,28 @@
-from typing import Dict, Any, List
-from openai import AsyncOpenAI
-from supabase.client import Client, create_client
 import os
+import sys
 import json
-from dotenv import load_dotenv
+from typing import Dict, Any, List, Optional
+import uuid
 import asyncio
+from supabase import create_client, Client
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load environment variables
 load_dotenv()
 
 class PreferencesAgent:
-    def __init__(self, use_service_key: bool = False):
-        key = os.getenv("SUPABASE_SERVICE_KEY" if use_service_key else "SUPABASE_KEY", "")
-        url = os.getenv("SUPABASE_URL", "")
+    def __init__(self):
+        # Initialize Supabase client
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+        
         if not url or not key:
-            raise ValueError("Missing required environment variables: SUPABASE_URL and SUPABASE_KEY/SUPABASE_SERVICE_KEY")
-
+            raise ValueError("Missing required environment variables: SUPABASE_URL and SUPABASE_KEY/SUPABASE_SERVICE_ROLE_KEY")
+        
         self.supabase: Client = create_client(url, key)
         self.openai = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -74,93 +81,41 @@ class PreferencesAgent:
                 'excluded_cuisines': []
             }
 
-    async def get_group_preferences(self, user_id: str, group_name: str) -> Dict[str, List[str]]:
-        """
-        Get combined preferences for all members of a group.
-        
-        Args:
-            user_id (str): The ID of the user who created the group
-            group_name (str): The name of the group
-            
-        Returns:
-            Dict[str, List[str]]: Dictionary containing combined preferences:
-                - dietary_requirements: List of all dietary requirements
-                - excluded_cuisines: List of all excluded cuisines
-        """
+    async def get_group_preferences(self, group_name: str, user_id: str) -> Dict[str, Any]:
         try:
-            print(f"\nLooking up group '{group_name}' for user '{user_id}'")
+            # Get group details using run_in_executor
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.supabase.rpc(
+                    'get_group_members_preferences',
+                    {'group_name': group_name, 'user_id': user_id}
+                ).execute()
+            )
             
-            # Try to find the group by ID first if it's the Navnit group
-            if group_name == "Navnit":
-                group_id = "8947882d-e25c-4e02-bf6a-d0232f4ab5de"
-                print(f"Looking up group with ID: {group_id}")
-                # Run the synchronous operation in a thread pool
-                loop = asyncio.get_event_loop()
-                group_response = await loop.run_in_executor(
-                    None,
-                    lambda: self.supabase.table('groups')
-                        .select('id, member_ids, name, created_by')
-                        .eq('id', group_id)
-                        .execute()
-                )
-                
-                if not group_response.data:
-                    print(f"No group found with ID {group_id}")
-                    return {
-                        'dietary_requirements': [],
-                        'excluded_cuisines': []
-                    }
-            else:
-                # Try to find the group by name
-                # Run the synchronous operation in a thread pool
-                loop = asyncio.get_event_loop()
-                group_response = await loop.run_in_executor(
-                    None,
-                    lambda: self.supabase.table('groups')
-                        .select('id, member_ids, name, created_by')
-                        .eq('name', group_name)
-                        .execute()
-                )
-                
-                if not group_response.data:
-                    print(f"No group found with name '{group_name}'")
-                    return {
-                        'dietary_requirements': [],
-                        'excluded_cuisines': []
-                    }
+            if not response.data:
+                print(f"No preferences found for group {group_name}")
+                return {
+                    'dietary_requirements': [],
+                    'excluded_cuisines': []
+                }
             
-            print(f"Group lookup response: {group_response.data}")
+            # Extract preferences from the response
+            preferences = response.data[0]
+            dietary_requirements = preferences.get('dietary_requirements', [])
+            excluded_cuisines = preferences.get('excluded_cuisines', [])
             
-            group = group_response.data[0]
-            member_ids = group.get('member_ids', [])
-            print(f"Found member IDs: {member_ids}")
+            print(f"Found preferences for group {group_name}:")
+            print(f"Dietary requirements: {dietary_requirements}")
+            print(f"Excluded cuisines: {excluded_cuisines}")
             
-            # Initialize sets for unique values
-            dietary_requirements = set()
-            excluded_cuisines_raw = []
-            
-            # Get preferences for each member
-            for member_id in member_ids:
-                member_prefs = await self.get_user_requirements(member_id)
-                print(f"Preferences for member {member_id}: {member_prefs}")
-                
-                # Add to sets (will automatically deduplicate)
-                dietary_requirements.update(member_prefs.get('dietary_requirements', []))
-                excluded_cuisines_raw.extend(member_prefs.get('excluded_cuisines', []))
-            
-            # Normalize and deduplicate excluded cuisines
-            excluded_cuisines = list({cuisine.title() for cuisine in excluded_cuisines_raw})
-            
-            # Convert back to lists
-            final_prefs = {
-                'dietary_requirements': list(dietary_requirements),
+            return {
+                'dietary_requirements': dietary_requirements,
                 'excluded_cuisines': excluded_cuisines
             }
-            print(f"Final combined preferences: {final_prefs}")
-            return final_prefs
             
         except Exception as e:
-            print(f'Error getting group preferences: {e}')
+            print(f"Error getting group preferences: {str(e)}")
             return {
                 'dietary_requirements': [],
                 'excluded_cuisines': []
@@ -251,7 +206,8 @@ class PreferencesAgent:
             
             # Get dietary requirements and excluded cuisines
             if extracted.get('group'):
-                preferences = await self.get_group_preferences(user_id, extracted['group'])
+                preferences = await self.get_group_preferences(extracted['group'], user_id)
+                print(f"Group preferences: {preferences}")
             else:
                 preferences = await self.get_user_requirements(user_id)
             

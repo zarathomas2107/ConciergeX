@@ -2,11 +2,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any
-from search_service.agents.restaurant_agent import RestaurantAgent
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from agents.restaurant_agent import RestaurantAgent
 import logging
 import uvicorn
 from dotenv import load_dotenv
-import os
 
 # Load environment variables
 load_dotenv()
@@ -68,8 +73,11 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
 
-if __name__ == "__main__":
+def main():
     # Get port from environment variable or default to 8080
     port = int(os.environ.get("PORT", 8080))
     # Use 0.0.0.0 to bind to all interfaces
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False) 
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
+
+if __name__ == "__main__":
+    main() 
