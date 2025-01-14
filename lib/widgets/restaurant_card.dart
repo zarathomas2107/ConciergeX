@@ -23,21 +23,8 @@ class RestaurantCard extends StatelessWidget {
   }) : super(key: key);
 
   void _onTap(BuildContext context) {
-    debugPrint('Card tapped for ${restaurant.name}');
-    debugPrint('Has date/time params: ${startDate != null && endDate != null && startTime != null && endTime != null}');
-    debugPrint('startDate: $startDate');
-    debugPrint('endDate: $endDate');
-    debugPrint('startTime: $startTime');
-    debugPrint('endTime: $endTime');
-    debugPrint('onAvailabilityCheck is null: ${onAvailabilityCheck == null}');
-    debugPrint('Total available slots: ${restaurant.availableSlots?.length}');
-    
     // Only show availability if we have valid date/time parameters
     if (startDate != null && endDate != null && startTime != null && endTime != null) {
-      debugPrint('Have valid date/time parameters');
-      debugPrint('Date range: ${startDate!.toIso8601String()} to ${endDate!.toIso8601String()}');
-      debugPrint('Time range: ${startTime!.format(context)} to ${endTime!.format(context)}');
-      
       final availableSlots = restaurant.getAvailableSlotsInRange(
         startDate!,
         endDate!,
@@ -45,20 +32,45 @@ class RestaurantCard extends StatelessWidget {
         endTime!,
       );
       
-      debugPrint('Found ${availableSlots?.length} filtered slots');
-      
       if (availableSlots != null && availableSlots.isNotEmpty) {
-        debugPrint('Has valid slots, calling onAvailabilityCheck');
         onAvailabilityCheck?.call(availableSlots);
-      } else {
-        debugPrint('No available slots to show');
       }
     } else {
-      debugPrint('No valid date/time parameters');
       if (onTap != null) {
         onTap!();
       }
     }
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey[100],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.restaurant_menu,
+            size: 48,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              restaurant.name,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -75,18 +87,29 @@ class RestaurantCard extends StatelessWidget {
             SizedBox(
               width: 160,
               height: 400,
-              child: Image.network(
-                restaurant.photoUrl ?? 'https://via.placeholder.com/800x450?text=No+Image',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey[300],
-                    child: const Center(
-                      child: Icon(Icons.restaurant, size: 50),
-                    ),
-                  );
-                },
-              ),
+              child: restaurant.photoUrl.isNotEmpty
+                ? Image.network(
+                    restaurant.photoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('Error loading image for ${restaurant.name}: $error');
+                      return _buildPlaceholder();
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: Colors.grey[100],
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : _buildPlaceholder(),
             ),
             // Details section
             Expanded(
@@ -126,22 +149,23 @@ class RestaurantCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 14),
                       ),
                       const SizedBox(height: 8),
-                      if (restaurant.cuisineTypes.contains('Vegetarian') &&
-                          restaurant.vegetarianScale != null &&
-                          restaurant.vegetarianScale != 'Unknown')
-                        Row(
-                          children: [
-                            const Icon(Icons.eco, color: Colors.green, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Veg Score: ${restaurant.vegetarianScale}',
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontSize: 14,
-                              ),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.eco,
+                            color: restaurant.vegetarianScale == "5+" ? Colors.green : Colors.grey,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            restaurant.vegetarianScale == "5+" ? 'Veg Score: 5+' : 'Not rated',
+                            style: TextStyle(
+                              color: restaurant.vegetarianScale == "5+" ? Colors.green : Colors.grey,
+                              fontSize: 12,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

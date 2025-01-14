@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class OpenAIClient:
     """Client for handling OpenAI API calls for embeddings and completions."""
     
-    def __init__(self, completion_model: str = "gpt-4o-mini", embedding_model: str = "text-embedding-3-small"):
+    def __init__(self, completion_model: str = "gpt-4", embedding_model: str = "text-embedding-3-small"):
         """Initialize the OpenAI client with API key."""
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:

@@ -21,24 +21,21 @@ class SupabaseClient:
         try:
             # Get environment variables
             self.url = os.getenv("SUPABASE_URL")
-            self.key = os.getenv("SUPABASE_ANON_KEY")
+            self.key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
             
             # Log environment variable status (without exposing sensitive data)
             logger.info("Checking Supabase environment variables...")
             logger.info(f"SUPABASE_URL is {'set' if self.url else 'not set'}")
-            logger.info(f"SUPABASE_ANON_KEY is {'set' if self.key else 'not set'}")
+            logger.info(f"SUPABASE_SERVICE_ROLE_KEY is {'set' if self.key else 'not set'}")
             
             if not self.url or not self.key:
                 raise ValueError(
                     "Missing Supabase credentials. "
-                    "SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables."
+                    "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in environment variables."
                 )
             
             # Log URL format (first 8 chars only for security)
             logger.info(f"Supabase URL format check - starts with: {self.url[:8]}...")
-            
-            # Log API key format (first 8 chars only for security)
-            logger.info(f"Supabase API key format check - starts with: {self.key[:8]}...")
             
             # Validate URL format
             if not self._is_valid_url(self.url):

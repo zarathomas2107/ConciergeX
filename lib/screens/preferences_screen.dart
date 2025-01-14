@@ -42,16 +42,16 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
 
   final List<String> _availableRestaurantPreferences = [
     'Dog_Friendly',
-    'Business_Meals',
+    'Business Meals',
     'Birthdays',
-    'Date_Nights',
-    'Pre_Theatre',
-    'Cheap_Eat',
-    'Fine_Dining',
-    'Family_Friendly',
+    'Date Nights',
+    'Pre Theatre',
+    'Cheap Eat',
+    'Fine Dining',
+    'Family Friendly',
     'Solo',
     'Bar',
-    'Casual_Dinner',
+    'Casual Dinner',
     'Brunch',
     'Breakfast',
     'Lunch',
@@ -79,6 +79,9 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
   List<String> _excludedCuisines = [];
   List<String> _selectedDietaryRequirements = [];
   List<String> _selectedRestaurantPreferences = [];
+  List<String> _locationPreferences = [];
+  List<String> _otherRequirements = [];
+  List<String> _otherRestaurantPreferences = [];
   bool _isDietaryExpanded = false;
   bool _isRestaurantExpanded = false;
 
@@ -95,7 +98,24 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
       // Initialize from initial preferences
       _selectedDietaryRequirements = List<String>.from(widget.initialPreferences['dietary_requirements'] ?? []);
       _selectedRestaurantPreferences = List<String>.from(widget.initialPreferences['restaurant_preferences'] ?? []);
+      _locationPreferences = List<String>.from(widget.initialPreferences['location_preferences'] ?? []);
       _excludedCuisines = List<String>.from(widget.initialPreferences['excluded_cuisines'] ?? []);
+      
+      // Separate other requirements and preferences
+      _otherRequirements = _selectedDietaryRequirements
+          .where((req) => !_availableDietaryRequirements.contains(req))
+          .toList();
+      _selectedDietaryRequirements = _selectedDietaryRequirements
+          .where((req) => _availableDietaryRequirements.contains(req))
+          .toList();
+
+      _otherRestaurantPreferences = _selectedRestaurantPreferences
+          .where((pref) => !_availableRestaurantPreferences.contains(pref))
+          .toList();
+      _selectedRestaurantPreferences = _selectedRestaurantPreferences
+          .where((pref) => _availableRestaurantPreferences.contains(pref))
+          .toList();
+          
       setState(() => _loading = false);
     } catch (e) {
       setState(() {
@@ -105,14 +125,85 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     }
   }
 
-  void _savePreferences() {
-    final preferences = {
-      'dietary_requirements': _selectedDietaryRequirements,
-      'restaurant_preferences': _selectedRestaurantPreferences,
-      'excluded_cuisines': _excludedCuisines,
-    };
+  Future<void> _savePreferences() async {
+    if (_loading) return;
+    setState(() => _loading = true);
 
-    widget.onPreferencesSaved(preferences);
+    try {
+      final preferences = {
+        'dietary_requirements': [
+          ..._selectedDietaryRequirements,
+          ..._otherRequirements,
+        ],
+        'restaurant_preferences': [
+          ..._selectedRestaurantPreferences,
+          ..._otherRestaurantPreferences,
+        ],
+        'location_preferences': _locationPreferences,
+        'excluded_cuisines': _excludedCuisines,
+      };
+
+      if (widget.isUserPreferences) {
+        await _supabase.from('profiles').update(preferences).eq('id', _supabase.auth.currentUser!.id);
+      }
+
+      if (!mounted) return;
+
+      // Call the callback with the preferences
+      widget.onPreferencesSaved(preferences);
+      
+    } catch (e) {
+      debugPrint('Error saving preferences: $e');
+      if (mounted) {
+        setState(() => _error = 'Error saving preferences: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving preferences: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _addLocationPreference() async {
+    final location = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Location'),
+        content: TextField(
+          decoration: const InputDecoration(
+            hintText: 'Enter location (e.g., Soho, Mayfair)',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final textField = context.findRenderObject() as RenderBox;
+              final text = (textField as dynamic).child?.child?.controller?.text;
+              Navigator.pop(context, text);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (location != null && location.isNotEmpty && mounted) {
+      setState(() {
+        _locationPreferences.add(location);
+      });
+    }
   }
 
   @override
@@ -245,6 +336,57 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                Card(
+                  child: ExpansionTile(
+                    title: const Text(
+                      'Location Preferences',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Preferred Areas',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add),
+                                  onPressed: _addLocationPreference,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _locationPreferences.map((location) {
+                                return Chip(
+                                  label: Text(location),
+                                  onDeleted: () {
+                                    setState(() {
+                                      _locationPreferences.remove(location);
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
             ),
     );

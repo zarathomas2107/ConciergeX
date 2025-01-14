@@ -31,7 +31,8 @@ class DateTimeAgent:
             'brunch': {'start': '10:30', 'end': '13:00'},    # 2.5 hours
             'lunch': {'start': '12:00', 'end': '14:00'},     # 2 hours
             'dinner': {'start': '19:00', 'end': '21:00'},    # 2 hours
-            'meeting': {'duration': 2}  # hours
+            'meeting': {'duration': 2},  # hours
+            'default': {'start': '09:00', 'end': '22:00'}    # Default time range when no time specified
         }
         
         # Map various time contexts to standard meal times
@@ -65,7 +66,8 @@ IMPORTANT RULES:
    - For day queries: use the next occurrence of that day
    - For generic queries: use the next valid date
    - For time-specific queries on the current day: if the time has passed, move to tomorrow
-4. For time ranges, use EXACTLY these standard durations:
+4. For time ranges:
+   - If NO specific time or meal is mentioned: use start="09:00", end="22:00" (full day)
    - For breakfast/morning: start="07:00", end="10:00" (3 hours)
    - For brunch: start="10:30", end="13:00" (2.5 hours)
    - For lunch/afternoon: start="12:00", end="14:00" (2 hours)
@@ -73,7 +75,8 @@ IMPORTANT RULES:
    - For meetings: use 2 hour duration from specified start time
 5. For month-based queries (e.g. "Dinner in March"):
    - Set day_context to the month name (e.g. "march")
-   - Use standard dinner time (19:00-21:00) if no specific time given
+   - Use standard dinner time (19:00-21:00) if meal time given
+   - Use default time (09:00-22:00) if no time specified
    - Set start_date to the first day of the month
    - Set end_date to the last day of the month
    - If the month has already passed this year (based on get_current_time()), use next year
@@ -82,39 +85,15 @@ IMPORTANT RULES:
    - Set start_date to current date from get_current_time()
    - Set end_date to the last day of the current month
    - If current month is ending soon (less than 7 days left), use next month
-   - If time_context is empty and current time (from get_current_time()) is:
-     * Before 11:00: assume breakfast/morning (07:00-10:00)
-     * 11:00-14:00: assume lunch/afternoon (12:00-14:00)
-     * After 14:00: assume dinner/evening (19:00-21:00)
-   - If the specified time has already passed today, use tomorrow's date
+   - If no time specified: use default time (09:00-22:00)
+   - If time_context is specified but time has passed today, use tomorrow's date
 7. For availability queries (e.g. "What's available", "Show availability"):
    - Set day_context to "this month"
    - Set start_date to current date from get_current_time()
    - Set end_date to the last day of the current month
    - If current month is ending soon (less than 7 days left), use next month
-   - Leave time_context empty unless specifically mentioned
-   - Leave start_time and end_time empty unless specifically mentioned
+   - If no time specified: use default time (09:00-22:00)
 8. Return ONLY the JSON object, no comments or explanations
-
-Example for "Dinner in March" (assuming current date from get_current_time() is January 2024):
-{
-    "start_date": "2024-03-01",
-    "end_date": "2024-03-31",
-    "start_time": "19:00",
-    "end_time": "21:00",
-    "day_context": "march",
-    "time_context": "dinner"
-}
-
-Example for "Restaurants near Covent Garden" (assuming current date from get_current_time() is January 25, 2024, 15:00):
-{
-    "start_date": "2024-01-25",
-    "end_date": "2024-01-31",
-    "start_time": "19:00",
-    "end_time": "21:00",
-    "day_context": "this month",
-    "time_context": "dinner"
-}
 """
 
     def get_current_time(self) -> datetime:
@@ -241,6 +220,12 @@ Example for "Restaurants near Covent Garden" (assuming current date from get_cur
             if time_context in self.TIME_CONTEXT_MAP:
                 time_context = self.TIME_CONTEXT_MAP[time_context]
                 datetime_info['time_context'] = time_context
+            
+            # If no time context and no specific times, use default time range
+            if not time_context and not datetime_info.get('start_time') and not datetime_info.get('end_time'):
+                datetime_info['start_time'] = self.MEAL_TIMES['default']['start']
+                datetime_info['end_time'] = self.MEAL_TIMES['default']['end']
+                return datetime_info
             
             if time_context in self.MEAL_TIMES:
                 if time_context == 'meeting':

@@ -160,6 +160,7 @@ class _MyAppState extends State<MyApp> {
           case '/signup':
             return MaterialPageRoute(
               builder: (_) => const SignupScreen(),
+              fullscreenDialog: true,
             );
           case '/login':
             return MaterialPageRoute(
@@ -182,7 +183,6 @@ class _MyAppState extends State<MyApp> {
               builder: (_) => const LoginScreen(),
             );
         }
-        return null;
       },
     );
   }

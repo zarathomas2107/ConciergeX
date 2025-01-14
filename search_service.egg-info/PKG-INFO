@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: search_service
+Version: 0.1
+Requires-Dist: openai
+Requires-Dist: python-dotenv
+Requires-Dist: supabase
+Requires-Dist: pytest
+Requires-Dist: pytest-asyncio

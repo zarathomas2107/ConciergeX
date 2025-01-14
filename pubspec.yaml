@@ -14,11 +14,10 @@ dependencies:
   dart_openai: ^5.0.0
   geolocator: ^13.0.2
   mapbox_maps_flutter: ^2.5.0
-  google_maps_flutter: ^2.5.3
+  google_maps_flutter: ^2.3.0
   google_maps_utils: ^1.5.1
   app_links: ^3.5.1
   cupertino_icons: ^1.0.2
-  image_picker: ^1.0.4
   email_validator: ^2.1.17
 
 flutter:
@@ -26,6 +25,7 @@ flutter:
   assets:
     - assets/Icons/
     - .env
+    - assets/images/
 
 version: 1.0.0+1
 

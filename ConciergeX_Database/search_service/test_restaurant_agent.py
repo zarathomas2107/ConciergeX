@@ -12,7 +12,7 @@ async def test_restaurant_agent():
     agent = RestaurantAgent()
     
     # Test case 1: Group query with location and time
-    query = "Looking for italian dinner with @Jim in Covent Garden next Friday"
+    query = "Looking for italian dinner with @Jim in Shoreditch next Friday"
     user_id = "a196d6e8-1e2e-4ded-a63c-37f4a18dc1d1"
     
     print("\nTest Case 1:")

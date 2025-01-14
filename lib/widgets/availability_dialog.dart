@@ -19,6 +19,7 @@ class AvailabilityDialog extends StatefulWidget {
 class _AvailabilityDialogState extends State<AvailabilityDialog> {
   late DateTime selectedDate;
   late final Map<DateTime, List<AvailabilitySlot>> slotsByDate;
+  AvailabilitySlot? selectedSlot;
 
   @override
   void initState() {
@@ -35,18 +36,34 @@ class _AvailabilityDialogState extends State<AvailabilityDialog> {
     
     // Set initial selected date
     final dates = slotsByDate.keys.toList()..sort();
-    selectedDate = dates.first;
+    selectedDate = dates.isNotEmpty ? dates.first : DateTime.now();
   }
 
   @override
   Widget build(BuildContext context) {
     final dates = slotsByDate.keys.toList()..sort();
     
+    if (dates.isEmpty) {
+      return AlertDialog(
+        title: Text('No Availability'),
+        content: Text('No available time slots found for ${widget.restaurant.name}.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      );
+    }
+    
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(8),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,14 +78,14 @@ class _AvailabilityDialogState extends State<AvailabilityDialog> {
                       Text(
                         widget.restaurant.name,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
                         widget.restaurant.cuisineTypes.join(' • '),
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           color: Colors.grey[600],
                         ),
                       ),
@@ -83,31 +100,38 @@ class _AvailabilityDialogState extends State<AvailabilityDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: dates.map((date) {
                   final isSelected = date == selectedDate;
+                  final dateFormatter = DateFormat('E, MMM d');
                   return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          selectedDate = date;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.blue : Colors.grey[800],
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          '${date.day}/${date.month}',
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.grey[400],
-                            fontSize: 14,
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            selectedDate = date;
+                            selectedSlot = null;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? Theme.of(context).primaryColor : Colors.grey[800],
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            dateFormatter.format(date),
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.grey[300],
+                              fontSize: 14,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            ),
                           ),
                         ),
                       ),
@@ -116,29 +140,89 @@ class _AvailabilityDialogState extends State<AvailabilityDialog> {
                 }).toList(),
               ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: slotsByDate[selectedDate]!.map((slot) {
-                final hour = slot.timeSlot.hour.toString().padLeft(2, '0');
-                final minute = slot.timeSlot.minute.toString().padLeft(2, '0');
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$hour:$minute',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 14,
+            const SizedBox(height: 16),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: slotsByDate[selectedDate]?.map((slot) {
+                    final hour = slot.timeSlot.hour.toString().padLeft(2, '0');
+                    final minute = slot.timeSlot.minute.toString().padLeft(2, '0');
+                    final isSelected = selectedSlot == slot;
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            selectedSlot = slot;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                isSelected 
+                                  ? Theme.of(context).primaryColor 
+                                  : Theme.of(context).primaryColor.withOpacity(0.8),
+                                isSelected 
+                                  ? Theme.of(context).primaryColor.withOpacity(0.8) 
+                                  : Theme.of(context).primaryColor,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '$hour:$minute',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList() ?? [],
+                ),
+              ),
+            ),
+            if (selectedSlot != null) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, selectedSlot);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                );
-              }).toList(),
-            ),
+                  child: const Text(
+                    'Confirm Booking',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

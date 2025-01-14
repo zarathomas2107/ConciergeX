@@ -186,102 +186,148 @@ class _GroupsScreenState extends State<GroupsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: _groups.length,
-              itemBuilder: (context, index) {
-                final group = _groups[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: ExpansionTile(
-                    title: Text(group.name),
-                    subtitle: Text('${group.memberIds.length} members'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+          : RefreshIndicator(
+              onRefresh: _loadGroups,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(
+                  left: 16.0,
+                  right: 16.0,
+                  top: 16.0,
+                  bottom: 80.0, // Add padding at bottom for FAB
+                ),
+                itemCount: _groups.length,
+                itemBuilder: (context, index) {
+                  final group = _groups[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: ExpansionTile(
+                      title: Text(group.name),
+                      subtitle: Text('${group.memberIds.length} members'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => _deleteGroup(group),
+                          ),
+                          const Icon(Icons.expand_more),
+                        ],
+                      ),
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _deleteGroup(group),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: FutureBuilder<List<Map<String, dynamic>>>(
+                            future: _loadMemberDetails(group.memberIds),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text('No members'),
+                                );
+                              }
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8.0, bottom: 8.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        TextButton.icon(
+                                          onPressed: () => _addMember(group),
+                                          icon: const Icon(Icons.person_add),
+                                          label: const Text('Add Member'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  ...snapshot.data!.map((member) => Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                    child: ListTile(
+                                      title: Text(
+                                        '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
+                                        style: Theme.of(context).textTheme.titleMedium,
+                                      ),
+                                      subtitle: member['email'] != null 
+                                        ? Text(
+                                            member['email'],
+                                            overflow: TextOverflow.ellipsis,
+                                          )
+                                        : null,
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit),
+                                            onPressed: () {
+                                              // Helper function to safely convert to List<String>
+                                              List<String> toStringList(dynamic value) {
+                                                if (value == null) return [];
+                                                if (value is List) return List<String>.from(value);
+                                                if (value is String) return [value];
+                                                return [];
+                                              }
+
+                                              final groupMember = GroupMember(
+                                                id: member['id'],
+                                                name: member['first_name'] + ' ' + (member['last_name'] ?? ''),
+                                                dietaryRequirements: toStringList(member['dietary_requirements']),
+                                                restaurantPreferences: toStringList(member['restaurant_preferences']),
+                                                locationPreferences: toStringList(member['location_preferences']),
+                                                excludedCuisines: toStringList(member['excluded_cuisines']),
+                                              );
+                                              _editMemberPreferences(group, groupMember);
+                                            },
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            visualDensity: VisualDensity.compact,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // Only show delete button if:
+                                          // 1. Current user is the creator and not removing themselves
+                                          // 2. Current user is removing themselves
+                                          if ((group.createdBy == _supabase.auth.currentUser?.id && 
+                                               member['id'] != _supabase.auth.currentUser?.id) ||
+                                              (group.createdBy != _supabase.auth.currentUser?.id && 
+                                               member['id'] == _supabase.auth.currentUser?.id))
+                                            IconButton(
+                                              icon: const Icon(Icons.person_remove),
+                                              onPressed: () => _removeMember(group, member['id']),
+                                              color: Colors.red,
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              visualDensity: VisualDensity.compact,
+                                            ),
+                                        ],
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16.0,
+                                        vertical: 4.0,
+                                      ),
+                                    ),
+                                  )).toList(),
+                                ],
+                              );
+                            },
+                          ),
                         ),
-                        const Icon(Icons.expand_more),
                       ],
                     ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: FutureBuilder<List<Map<String, dynamic>>>(
-                          future: _loadMemberDetails(group.memberIds),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator());
-                            }
-                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                              return const Padding(
-                                padding: EdgeInsets.all(16.0),
-                                child: Text('No members'),
-                              );
-                            }
-                            return Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8.0, bottom: 8.0),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      TextButton.icon(
-                                        onPressed: () => _addMember(group),
-                                        icon: const Icon(Icons.person_add),
-                                        label: const Text('Add Member'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ...snapshot.data!.map((member) => Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                  child: ListTile(
-                                    title: Text(
-                                      '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}'.trim(),
-                                      style: Theme.of(context).textTheme.titleMedium,
-                                    ),
-                                    subtitle: member['email'] != null 
-                                      ? Text(member['email']) 
-                                      : null,
-                                    trailing: SizedBox(
-                                      width: 48,  // Fixed width for single icon
-                                      child: IconButton(
-                                        icon: const Icon(Icons.edit),
-                                        onPressed: () {
-                                          final groupMember = GroupMember(
-                                            id: member['id'],
-                                            name: member['first_name'] + ' ' + (member['last_name'] ?? ''),
-                                            dietaryRequirements: List<String>.from(member['dietary_requirements'] ?? []),
-                                            restaurantPreferences: List<String>.from(member['restaurant_preferences'] ?? []),
-                                            locationPreferences: List<String>.from(member['location_preferences'] ?? []),
-                                            excludedCuisines: List<String>.from(member['excluded_cuisines'] ?? []),
-                                          );
-                                          _editMemberPreferences(group, groupMember);
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                )).toList(),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _createGroup,
         backgroundColor: Colors.black,
-        child: Icon(
+        child: const Icon(
           Icons.add,
           size: 24,
           color: Colors.white,
@@ -293,40 +339,90 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Future<void> _addMember(Group group) async {
     if (!mounted) return;
 
-    final result = await showDialog<User>(
-      context: context,
-      barrierDismissible: false,
-      useRootNavigator: true,
-      builder: (BuildContext context) => WillPopScope(
-        onWillPop: () async => false,  // Prevent back button from closing dialog
-        child: AddMemberDialog(),
-      ),
-    );
-    
-    if (result == null || !mounted) return;
-
     try {
-      final updatedMemberIds = [...group.memberIds, result.id];
+      final result = await showDialog<User>(
+        context: context,
+        barrierDismissible: false,
+        useRootNavigator: true,
+        builder: (BuildContext context) => WillPopScope(
+          onWillPop: () async => false,
+          child: AddMemberDialog(),
+        ),
+      );
       
-      await _supabase
-          .from('groups')
-          .update({
-            'member_ids': updatedMemberIds,
-          })
-          .eq('id', group.id);
+      if (result == null || !mounted) return;
 
-      if (mounted) {
-        // Schedule reload for next frame
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _loadGroups();
+      setState(() => _loading = true);
+
+      // Add retry logic for Supabase operation
+      int retryCount = 0;
+      const maxRetries = 3;
+      while (retryCount < maxRetries) {
+        try {
+          // Update the group's member_ids array
+          final updatedMemberIds = [...group.memberIds, result.id];
+          
+          await _supabase
+              .from('groups')
+              .update({
+                'member_ids': updatedMemberIds,
+              })
+              .eq('id', group.id);
+          
+          break; // Success, exit retry loop
+        } catch (e) {
+          retryCount++;
+          if (retryCount == maxRetries) {
+            throw e; // Throw on final retry
           }
-        });
+          // Wait before retrying
+          await Future.delayed(Duration(seconds: 1));
+        }
+      }
+
+      if (!mounted) return;
+      
+      // Add retry logic for loading groups
+      retryCount = 0;
+      while (retryCount < maxRetries) {
+        try {
+          await _loadGroups();
+          break; // Success, exit retry loop
+        } catch (e) {
+          retryCount++;
+          if (retryCount == maxRetries) {
+            throw e; // Throw on final retry
+          }
+          // Wait before retrying
+          await Future.delayed(Duration(seconds: 1));
+        }
+      }
+      
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Member added successfully')),
+        );
       }
     } catch (e) {
+      debugPrint('Error in _addMember: $e');
       if (mounted) {
+        setState(() => _loading = false);
+        
+        // Show a more user-friendly error message
+        final errorMessage = e.toString().contains('Connection reset') 
+            ? 'Connection error. Please check your internet connection and try again.'
+            : 'Error adding member. Please try again.';
+            
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding member: $e')),
+          SnackBar(
+            content: Text(errorMessage),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _addMember(group),
+            ),
+          ),
         );
       }
     }
@@ -583,8 +679,9 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   bool _isNewMember = true;
-  List<Map<String, dynamic>> _foundUsers = [];
   bool _searchingUser = false;
+  bool _loading = false;
+  List<Map<String, dynamic>> _foundUsers = [];
 
   @override
   void dispose() {
@@ -597,113 +694,116 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 400,
-            maxHeight: MediaQuery.of(context).size.height * 0.8,
-          ),
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Add Member',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: true, label: Text('New Member')),
-                  ButtonSegment(value: false, label: Text('Existing User')),
-                ],
-                selected: {_isNewMember},
-                onSelectionChanged: (Set<bool> newSelection) {
-                  setState(() {
-                    _isNewMember = newSelection.first;
-                    _foundUsers.clear();
-                    _firstNameController.clear();
-                    _lastNameController.clear();
-                    _emailController.clear();
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_isNewMember) ...[
-                        TextField(
-                          controller: _firstNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'First Name',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _lastNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Last Name',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _emailController,
-                          decoration: const InputDecoration(
-                            labelText: 'Email (optional)',
-                            border: OutlineInputBorder(),
-                          ),
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                      ] else ...[
-                        TextField(
-                          controller: _emailController,
-                          decoration: const InputDecoration(
-                            labelText: 'Search by email',
-                            border: OutlineInputBorder(),
-                          ),
-                          onChanged: _searchUsers,
-                        ),
-                        if (_searchingUser)
-                          const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: CircularProgressIndicator(),
-                          ),
-                        if (_foundUsers.isNotEmpty)
-                          ...(_foundUsers.map((user) => ListTile(
-                            title: Text('${user['first_name']} ${user['last_name']}'),
-                            subtitle: Text(user['email'] ?? ''),
-                            onTap: () => _handleExistingUser(user),
-                          )).toList()),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_isNewMember)
-                    TextButton(
-                      onPressed: _handleAddMember,
-                      child: const Text('Next'),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Add Member',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                ],
-              ),
+                    const SizedBox(height: 16),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: true, label: Text('New Member')),
+                        ButtonSegment(value: false, label: Text('Existing User')),
+                      ],
+                      selected: {_isNewMember},
+                      onSelectionChanged: (Set<bool> newSelection) {
+                        setState(() {
+                          _isNewMember = newSelection.first;
+                          _foundUsers.clear();
+                          _firstNameController.clear();
+                          _lastNameController.clear();
+                          _emailController.clear();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_isNewMember) ...[
+                              TextField(
+                                controller: _firstNameController,
+                                decoration: const InputDecoration(
+                                  labelText: 'First Name',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _lastNameController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Last Name',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _emailController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email (optional)',
+                                  border: OutlineInputBorder(),
+                                ),
+                                keyboardType: TextInputType.emailAddress,
+                              ),
+                            ] else ...[
+                              TextField(
+                                controller: _emailController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Search by email',
+                                  border: OutlineInputBorder(),
+                                ),
+                                onChanged: _searchUsers,
+                              ),
+                              if (_searchingUser)
+                                const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: CircularProgressIndicator(),
+                                ),
+                              if (_foundUsers.isNotEmpty)
+                                ...(_foundUsers.map((user) => ListTile(
+                                  title: Text('${user['first_name']} ${user['last_name']}'),
+                                  subtitle: Text(user['email'] ?? ''),
+                                  onTap: () => _handleExistingUser(user),
+                                )).toList()),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        if (_isNewMember)
+                          TextButton(
+                            onPressed: _handleAddMember,
+                            child: const Text('Next'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -742,47 +842,90 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
   void _handleAddMember() async {
     if (_firstNameController.text.isEmpty) return;
     
-    // Show preferences screen
-    final preferences = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PreferencesScreen(
-          isUserPreferences: false,
-          initialPreferences: {
-            'dietary_requirements': [],
-            'restaurant_preferences': [],
-          },
-          onPreferencesSaved: (prefs) => Navigator.pop(context, prefs),
-        ),
-      ),
-    );
-
-    if (preferences == null) return;
-    
     try {
-      // First create a profile for the new member
-      final response = await _supabase.from('profiles').insert({
-        'first_name': _firstNameController.text,
-        'last_name': _lastNameController.text,
-        'email': _emailController.text,
-        'dietary_requirements': preferences['dietary_requirements'] ?? [],
-        'restaurant_preferences': preferences['restaurant_preferences'] ?? [],
-      }).select().single();
+      // Store the current context
+      final dialogContext = context;
       
-      // Create User object with the new profile's ID
-      final user = User(
-        id: response['id'],
-        email: response['email'] ?? '',
-        firstName: response['first_name'],
-        lastName: response['last_name'],
+      setState(() => _loading = true);
+      
+      // Show preferences screen
+      final preferences = await Navigator.of(dialogContext).push<Map<String, dynamic>>(
+        MaterialPageRoute(
+          builder: (context) => PreferencesScreen(
+            isUserPreferences: false,
+            initialPreferences: {
+              'dietary_requirements': [],
+              'restaurant_preferences': [],
+              'location_preferences': [],
+              'excluded_cuisines': [],
+            },
+            onPreferencesSaved: (prefs) {
+              Navigator.of(context).pop(prefs);
+            },
+          ),
+        ),
       );
+
+      if (!mounted) return;
       
-      Navigator.pop(context, user);
+      if (preferences == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      
+      try {
+        // First create a profile for the new member
+        final response = await _supabase.from('profiles').insert({
+          'first_name': _firstNameController.text,
+          'last_name': _lastNameController.text,
+          'email': _emailController.text,
+          'dietary_requirements': preferences['dietary_requirements'] ?? [],
+          'restaurant_preferences': preferences['restaurant_preferences'] ?? [],
+          'location_preferences': preferences['location_preferences'] ?? [],
+          'excluded_cuisines': preferences['excluded_cuisines'] ?? [],
+        }).select().single();
+
+        if (!mounted) return;
+
+        // Create User object with the new profile's ID
+        final user = User(
+          id: response['id'],
+          email: response['email'] ?? '',
+          firstName: response['first_name'],
+          lastName: response['last_name'],
+        );
+        
+        // Pop the dialog with the new user
+        Navigator.of(dialogContext).pop(user);
+        
+      } catch (e) {
+        debugPrint('Error creating member profile: $e');
+        if (!mounted) return;
+        
+        setState(() => _loading = false);
+        
+        // Show error dialog
+        await showDialog(
+          context: dialogContext,
+          builder: (context) => AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to create member: ${e.toString()}'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close error dialog
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e) {
-      debugPrint('Error creating member profile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating member: $e')),
-      );
+      debugPrint('Error in preferences screen: $e');
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -796,12 +939,7 @@ class _AddMemberDialogState extends State<AddMemberDialog> {
       lastName: userData['last_name'],
     );
     
-    // Schedule navigation for the next frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(user);
-      }
-    });
+    Navigator.pop(context, user);
   }
 }
 

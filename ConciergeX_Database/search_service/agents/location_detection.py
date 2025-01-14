@@ -52,45 +52,61 @@ class LocationDetectionAgent:
             # System prompt for location extraction
             system_prompt = """
                 You are a location extraction assistant specialized in London locations. Extract ONLY explicit location terms from queries.
-                
-                IMPORTANT: You MUST detect and return:
+
+                IMPORTANT: You MUST detect and return any mentions of these London areas and regions:
+
+                Central London:
+                - Westminster, Covent Garden, Soho, Mayfair, Bloomsbury, Fitzrovia, Holborn, St. James's, South Bank
+
+                North London:
+                - Camden, Islington, Hampstead, Highgate, Finchley, Muswell Hill, Finsbury Park
+
+                East London:
+                - Shoreditch, Hackney, Stratford, Canary Wharf, Bethnal Green, Bow, Walthamstow
+
+                South London:
+                - Brixton, Clapham, Greenwich, Dulwich, Wimbledon, Croydon, Peckham, Elephant and Castle
+
+                West London:
+                - Kensington, Chelsea, Notting Hill, Hammersmith, Fulham, Ealing, Chiswick, Richmond
+
+                Greater London Suburbs:
+                - Harrow, Bromley, Enfield, Kingston upon Thames, Hounslow, Barnet, Ilford
+
+                Additionally, detect and return:
                 1. Famous landmarks (e.g., "Big Ben", "Tower Bridge", "British Museum", "London Eye")
-                2. Areas/neighborhoods (e.g., "Soho", "Mayfair", "Covent Garden", "Camden")
-                3. Streets (e.g., "Oxford Street", "Piccadilly", "Bond Street")
-                4. Stations (e.g., "Oxford Circus", "Waterloo", "King's Cross")
-                5. Office buildings and company locations (e.g., "Databricks office", "Google HQ", "Amazon office")
-                6. The city "London" when explicitly mentioned
-                
+                2. Streets (e.g., "Oxford Street", "Piccadilly", "Bond Street")
+                3. Stations (e.g., "Oxford Circus", "Waterloo", "King's Cross")
+                4. Office buildings and company locations (e.g., "Databricks office", "Google HQ", "Amazon office")
+                5. The city "London" when explicitly mentioned
+
                 Rules:
                 1. Return ONLY explicit location mentions
                 2. Don't infer or guess locations - only return what's explicitly stated
                 3. Return an empty list if NO locations are found
                 4. Format as a JSON array of strings
-                5. Generic terms like "restaurant", "cinema", "park" are NOT locations unless they are combined with other "terms or locations"
+                5. Generic terms like "restaurant", "cinema", "park" are NOT locations unless combined with specific locations
                 6. DO include company offices when mentioned (e.g., "Databricks office", "Google office")
                 7. When a company office is mentioned, include both the company name with "office" and the city if specified
-                
+
                 Examples:
-                Input: "Looking for Italian food near British Museum in Bloomsbury"
-                Output: ["British Museum", "Bloomsbury"]
-                
-                Input: "Restaurant near Databricks office in London"
-                Output: ["Databricks office", "London"]
-                
-                Input: "Is there a good restaurant in Mayfair?"
-                Output: ["Mayfair"]
-                
-                Input: "Want to see Big Ben"
-                Output: ["Big Ben"]
-                
-                Input: "What's good for dinner?"
+                Input: "Looking for Italian food in Hackney"
+                Output: ["Hackney"]
+
+                Input: "Restaurant near Databricks office in Shoreditch"
+                Output: ["Databricks office", "Shoreditch"]
+
+                Input: "Dinner in Mayfair near Bond Street"
+                Output: ["Mayfair", "Bond Street"]
+
+                Input: "Places to eat in Canary Wharf"
+                Output: ["Canary Wharf"]
+
+                Input: "Restaurant with @Family"
                 Output: []
-                
-                Input: "Indian Restaurant with @Family"
-                Output: []
-                
-                Input: "Looking for a cinema"
-                Output: []
+
+                Input: "Looking for a cinema in Stratford near Westfield"
+                Output: ["Stratford", "Westfield"]
             """.strip()
             
             # Get completion from OpenAI

@@ -13,15 +13,18 @@ RUN apt-get update && apt-get install -y \
 # Copy the entire search_service directory
 COPY ConciergeX_Database/search_service /app/search_service
 
-# Copy environment file
-COPY .env /app/.env
+# Create environment file (will be overridden by Cloud Run environment variables)
+RUN touch /app/search_service/.env
 
-# Install requirements
-RUN pip install --no-cache-dir -r /app/search_service/api/requirements.txt
+# Set working directory
+WORKDIR /app/search_service
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r api/requirements.txt
 
 # Set environment variables
 ENV PORT=8080
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/search_service
 ENV HOST=0.0.0.0
 ENV PYTHONUNBUFFERED=1
 
@@ -33,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 EXPOSE ${PORT}
 
 # Command to run the application
-CMD ["python", "-m", "search_service.api.main"] 
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "api.main:app"]

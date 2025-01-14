@@ -16,18 +16,6 @@ class Restaurant {
   final List<AvailabilitySlot>? availableSlots;
   final String? vegetarianScale;
 
-  String get photoUrl {
-    try {
-      if (id.isEmpty) {
-        return 'https://picsum.photos/400/300';
-      }
-      
-      return 'https://ryvqoavkltzagedrvymy.supabase.co/storage/v1/object/public/Photos/London_Restaurant_Photos/$id.jpg';
-    } catch (e) {
-      return 'https://picsum.photos/400/300';
-    }
-  }
-
   Restaurant({
     required this.id,
     required this.name,
@@ -44,60 +32,36 @@ class Restaurant {
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
-    // Handle available_slots parsing
-    List<AvailabilitySlot>? slots;
-    var slotsData = json['available_slots'];
+    final List<dynamic> slots = json['available_slots'] ?? [];
     
-    if (slotsData != null) {
-      try {
-        // If slotsData is a string, try to decode it
-        if (slotsData is String) {
-          slotsData = jsonDecode(slotsData);
-        }
-        
-        // Now slotsData should be a List
-        if (slotsData is List) {
-          slots = slotsData.map((slotData) {
-            if (slotData is Map<String, dynamic>) {
-              return AvailabilitySlot.fromJson(slotData);
-            }
-            return null;
-          }).whereType<AvailabilitySlot>().toList();
-        } else {
-          slots = [];
-        }
-      } catch (e) {
-        slots = [];
-      }
+    // Handle cuisine_type as a List
+    List<String> cuisineTypes;
+    if (json['cuisine_type'] is List) {
+      cuisineTypes = (json['cuisine_type'] as List).map((e) => e.toString()).toList();
+    } else if (json['cuisine_type'] is String) {
+      cuisineTypes = (json['cuisine_type'] as String).split(',');
     } else {
-      slots = [];
+      cuisineTypes = ['Unknown'];
     }
 
-    // Handle cuisine_type parsing with better null safety
-    List<String> parseCuisineTypes(dynamic cuisineType) {
-      if (cuisineType == null) return ['Unknown'];
-      if (cuisineType is List) {
-        return cuisineType.map((e) => e.toString()).toList();
-      }
-      if (cuisineType is String) {
-        return [cuisineType];
-      }
-      return ['Unknown'];
-    }
+    // Handle price_level which can be -1
+    int? priceLevel = json['price_level'] == -1 ? null : json['price_level'] as int?;
+
+    final vegetarianScale = json['vegetarian_scale']?.toString();
 
     return Restaurant(
       id: json['id'] as String,
       name: json['name'] as String,
+      cuisineTypes: cuisineTypes,
+      rating: (json['rating'] as num).toDouble(),
       address: json['address'] as String?,
-      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      priceLevel: json['price_level'] as int?,
-      cuisineTypes: parseCuisineTypes(json['cuisine_type']),
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       distance: (json['distance'] as num?)?.toDouble(),
+      priceLevel: priceLevel,
       area: json['area'] as String?,
-      availableSlots: slots,
-      vegetarianScale: json['vegetarian_scale'] as String?,
+      availableSlots: slots.map((slot) => AvailabilitySlot.fromJson(slot)).toList(),
+      vegetarianScale: vegetarianScale,
     );
   }
 
@@ -133,42 +97,40 @@ class Restaurant {
       return null;
     }
     
-    debugPrint('Filtering slots for $name - Total slots: ${availableSlots!.length}');
-    debugPrint('Date range: ${startDate.toIso8601String()} to ${endDate.toIso8601String()}');
-    debugPrint('Time range: ${startTime.hour}:${startTime.minute} to ${endTime.hour}:${endTime.minute}');
-    
-    // Normalize dates to start/end of day
-    final startDateTime = DateTime(startDate.year, startDate.month, startDate.day);
-    final endDateTime = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
+    // Use default time range (07:00-22:00) if no specific times provided by API
+    final useDefaultTime = startTime.hour == 0 && startTime.minute == 0 && endTime.hour == 23 && endTime.minute == 59;
+    final effectiveStartTime = useDefaultTime ? const TimeOfDay(hour: 7, minute: 0) : startTime;
+    final effectiveEndTime = useDefaultTime ? const TimeOfDay(hour: 22, minute: 0) : endTime;
     
     // Convert TimeOfDay to minutes for comparison
-    final startMinutes = startTime.hour * 60 + startTime.minute;
-    final endMinutes = endTime.hour * 60 + endTime.minute;
+    final startMinutes = effectiveStartTime.hour * 60 + effectiveStartTime.minute;
+    final endMinutes = effectiveEndTime.hour * 60 + effectiveEndTime.minute;
     
     final filtered = availableSlots!.where((slot) {
-      // Normalize the slot date to start of day for comparison
       final slotDate = DateTime(slot.date.year, slot.date.month, slot.date.day);
       final slotMinutes = slot.timeSlot.hour * 60 + slot.timeSlot.minute;
       
-      // Check if date is within range (inclusive)
-      final isDateInRange = !slotDate.isBefore(startDateTime) && !slotDate.isAfter(endDateTime);
+      // Check if date is within range
+      final isDateInRange = !slotDate.isBefore(startDate) && !slotDate.isAfter(endDate);
       if (!isDateInRange) {
-        debugPrint('Slot date ${slotDate.toIso8601String()} outside range');
         return false;
       }
       
-      // Check if time is within range (inclusive)
+      // Check if time is within range
       final isTimeInRange = slotMinutes >= startMinutes && slotMinutes <= endMinutes;
       if (!isTimeInRange) {
-        debugPrint('Slot time ${slot.timeSlot.hour}:${slot.timeSlot.minute} ($slotMinutes minutes) outside range ($startMinutes-$endMinutes)');
         return false;
       }
       
       return true;
     }).toList();
 
-    debugPrint('Found ${filtered.length} slots in range for $name');
     return filtered;
+  }
+
+  String get photoUrl {
+    if (id.isEmpty) return '';
+    return 'https://ryvqoavkltzagedrvymy.supabase.co/storage/v1/object/public/Photos/London_Restaurant_Photos/$id.jpg';
   }
 }
 

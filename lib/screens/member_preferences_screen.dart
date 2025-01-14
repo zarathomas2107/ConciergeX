@@ -163,6 +163,8 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
   }
 
   Future<void> _savePreferences() async {
+    setState(() => _loading = true);
+    
     try {
       final allDietaryRequirements = [
         ..._selectedDietaryRequirements,
@@ -186,12 +188,18 @@ class _MemberPreferencesScreenState extends State<MemberPreferencesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Preferences saved')),
         );
-        Navigator.pop(context);
+        Navigator.of(context).pop(false);  // Return false to indicate member was not removed
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving preferences: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving preferences: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 

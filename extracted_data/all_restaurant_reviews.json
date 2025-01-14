@@ -1,0 +1,415 @@
+{
+  "bubala": {
+    "name": "bubala",
+    "rating": "8.5",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The 21 Best Vegan Restaurants In London",
+      "The Best Set Menus In London",
+      "London’s Best New Restaurants Of 2019",
+      "London's Best Private Dining Experiences For Under £50"
+    ],
+    "review": "Betting is a mug’s game. That’s what life coaches and people who always carry umbrellas will tell you. Sticking your hopes or hard-earned cash on something because of a gut feeling, or favourable percentage, or because Ray Winstone told you to ’av a bang on that, is both daft and dangerous. But it’s also exciting. Which is why some bets are worth making, and why we’re willing to bet that by the end of this review, you’ll be booking a table at Bubala. Why so confident? Well, just like a Premier League footballer with a bank account in the Cayman Islands, the numbers are on our side. Of the 14 things we’ve eaten at this vegetarian Spitalfields restaurant, 12 have been completely delicious. That’s a 98% success rate, or something. The point isn’t that we’re bad at maths, the point is that we’ve almost bitten fingers off shovelling charred laffa flatbread heaped with burnt butter hummus into our mouths. This is the kind of delicious the Middle Eastern style food at Bubala is. The kind where you become a danger to yourself. Considering the restaurant’s Spitalfields location and the surrounding area’s propensity to cause migraines, Bubala is a relative haven. The room, all pastel plastered walls and just-too-big-to-be-nickable plants, is a comfortable, canvas-like space for the colours and flavours of the menu. Nothing around you is meant to distract from the crispy but soft fried aubergine topped with dollops of tangy green zhoug, or the sweet and salty shiitake and oyster mushroom skewers. Even if there was a decorative formaldehyde prize marrow hanging above the bar, you would still find yourself focusing on the food. Where other restaurants stress how complicated everything is, Bubala does the opposite. The sharing menu stays the same day and night. And that’s a good thing. It means you and your friends will both enjoy a wedge of halloumi covered in black seed honey, at lunch or dinner, and be able to post hunger trap pictures of it on the same day.  It’s more opportunity for you to perch on the street-facing counter with just a portion of ful medames - a rich, nap-inducing bean stew topped with yoghurt and pesto - and a slice of buttery malawach for company. Or to book the bar for a dip date. You know, a date where you drink wine, get dips, and check whether there’s any adverse reaction to piling confit garlic topped labneh into your gob. Because if there is, they aren’t a keeper. Bubala’s one fault - to quote the smarmy parent of an over-achieving child - is that it’s almost too consistent. Meaning that the less plate-licking dishes like grilled cabbage or coconut sorbet, stand out like a measly B-. That’s a minor gripe though. Especially when you can eat for 30-odd quid a head here with a drink or two. And anyway, that so-so cabbage will be forgotten by the time you’re eating a scoop of tahini, date, and tangerine ice cream. It’s a mic drop so sweet, and so moreish, it will leave you thinking that Bubala isn’t just a safe bet. It’s a bloody good one.",
+    "food_rundown": [
+      {
+        "line1": "Laffa Flatbread",
+        "line2": "Direct from Ararat bakery in Dalston, this naan-ish flatbread comes warm, slightly charred, and sprinkled with salt. You’ll want one immediately. Then one for later. And one to use as a duvet cover at home."
+      },
+      {
+        "line1": "Hummus, Pumpkin Tirshy, Labneh, Grapefruit Ezme",
+        "line2": "These four dips are ordered separately, but let us save you the hassle: order all of them. The hummus is silky smooth with a healthy pool of burnt butter in the middle of it, the tirshy is sweet but savoury thanks to lemon and olives, the grapefruit ezme with tahini has a welcome crunch and sourness, while the labneh is paired with confit garlic. And as everyone knows: anything paired with confit garlic is a good thing."
+      },
+      {
+        "line1": "Fried Aubergine, Zhoug, Date Syrup",
+        "line2": "A classic “it’s never like this when I do it at home” plate of food. The aubergine is crisp-like at the edges, but the insides melt in your mouth. The zhoug, loaded with coriander, is a perfect match."
+      },
+      {
+        "line1": "Ful Medames, Lovage Pesto, Yoghurt, Malawach",
+        "line2": "Although this is a restaurant best suited to sharing, you could easily come here and drop a tenner on this bean stew with homemade malawich (a bread that’s buttery and pastry-ish) and leave both extremely happy and ready for bed."
+      },
+      {
+        "line1": "Shitake & Oyster Mushroom Skewers",
+        "line2": "Salty. Sweet. Savoury. Soft. Seductive. Maybe not the last one, but these skewers hit all the right notes. And at £2.50, it would be rude not to."
+      },
+      {
+        "line1": "Halloumi, Black Seed Honey",
+        "line2": "You look at that and you think,"
+      },
+      {
+        "line1": "now that is a piece of halloumi",
+        "line2": ", don’t you. An absolute slab of the most milky kind. You really, really have to be ordering this."
+      },
+      {
+        "line1": "Confit Potato Latkes, Toum, Aleppo Chilli",
+        "line2": "Are these latkes? Probably not. Do we care? Not remotely. These bad boys are a new entry into London’s ever growing list of Crispy And Soft Potatoes We’d Like To Eat In Bed Forever. The toum could do with a little more garlic, mind."
+      },
+      {
+        "line1": "Pomegranate Braised Cabbage, Tahini, Hazelnut",
+        "line2": "A wet wedge of cabbage that gave us a minor sock in puddle flashback. It’s not bad. It’s just a little one note (tahini) and watery."
+      },
+      {
+        "line1": "Tahini, Date & Tangerine Ice Cream",
+        "line2": "If anyone leaves any of this you shouldn’t call the police because it’s criminal, you should call us so we can eat it for them. A nutty, sticky, and fruit-filled contender for the finest scoop around."
+      },
+      {
+        "line1": "Coconut & Cardamom Sorbet, Sumac Roast Plums",
+        "line2": "This is not a bad dessert, but compared to the guy above, it’s not a hall of famer. The roasted plums are too strong for the sorbet. If you do order it, just make sure you leave a bite of the tahini ice cream to finish on."
+      }
+    ]
+  },
+  "persepolis": {
+    "name": "persepolis",
+    "rating": "8.5",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The Best Set Menus In London",
+      "Persian Restaurants, Specialty Supermarkets, & Meal Kits For Nowruz At Home",
+      "24 Speciality Supermarkets For When You Actually Want To Taste The Difference",
+      "Where To Impress Someone Without Looking Like You’re Trying Too Hard"
+    ],
+    "review": "Every Londoner claims to have the best corner shop in the world near them. Whether that’s because it truly is the best shop in the world, or because the owners never comment on your fraying Klaxons pyjama top, or your decision to have two packs of Maryland cookies and a Dr. Oetker Ristorante for breakfast, is debatable. The point is everyone thinks theirs is the best, but only if you live by Persepolis in Peckham are you objectively right. On first glance Persepolis is a yellow-coloured corner shop, but inside you’ll find a vegetarian Persian-inspired deli and cafe. You won’t get booze or a limited edition Kit Kat Chunky here. Instead, you’ll walk through to the back and get a delicious meze plate of falafel, tapenade, salad, and a load of dips. There’s even a token Wotsit stuck into the hummus—a pour one out the packet homage to all other corner shops. This plate, warm pitta included, is £6 for a single person portion. It’s as tasty as it is good value, which is the gist of everything here. The cafe is bric-a-brac homely; filled with different patterns, textures, and trinkets. If the lads from Queer Eye walked in they’d probably black out before their saffron-battered veg and pickles arrived. Which is a shame because the fritters and their yoghurt dip are pretty great, and are easily enough to share between a few of you. Aside from its bright and engaging decor—the walls are covered with pages from the owner’s cookbooks—the cafe itself is small and comfortable, and it fits a deceptive amount of people, much like a house party you and your friends weren’t invited to. Persepolis tends to have a constant stream of people at lunch and dinner. You’ll want to book around weekend-time, as it’s a popular BYOB spot, and their £25 a head tasting menu is one of London’s best group dinner and affordable date moves. It’s a conveyor belt of food that begins with meze, moves to a soup, before a couple of mains—that may include an excellent bean stew—before ending on a dessert platter of ice cream sundae, paklava, and fresh fruit. This is great food at a great price in a space that, if you’re into kaleidoscopes, is also great. Ultimately you can’t say all of this about any old corner shop in London, which is why Persepolis is the best of the lot.",
+    "food_rundown": [
+      {
+        "line1": "Persepolis Cold Buster Tea",
+        "line2": "If your immune system is as meek and fallible as ours is, then you’ll want to be ordering this tea. It’s full of all sorts of nature, tastes fresh as a field, and comes with a load of honey on the side."
+      },
+      {
+        "line1": "Meze Plate",
+        "line2": "A lot of meals around a fiver can feature crisps, but the Wotsit (or Cheeto) standing to attention on this plate makes it one of the best plates ft. crisps we’ve had. You’ll also get falafel, a pepper tapenade, a yoghurt and cucumber dip, some salads, and warm bread."
+      },
+      {
+        "line1": "Saffron-Battered Vegetable And Pickle Fritters",
+        "line2": "A plate of crispy golden deep fried things often bring joy and these are no different. If you didn’t think a gherkin could get any better, then come here."
+      },
+      {
+        "line1": "Cauliflower Soup",
+        "line2": "A decent enough soup that comes with vegan yoghurt on the side."
+      },
+      {
+        "line1": "Potato, Cauliflower, And Olive Afelia",
+        "line2": "An industrial plate of potatoes, cauliflower tomatoes, olives, onion, and vegan cheese. It’s a gooey beige space heater of a dish that’s big enough to keep you going all day. (Takeaway boxes are available)."
+      },
+      {
+        "line1": "Halloumi, Honey, Sesame Seeds, Flatbread",
+        "line2": "If you’ve got a sweet tooth then you’ll love this, and it is quite delicious. But you’ll probably want something else on the side to offset the sweetness."
+      },
+      {
+        "line1": "Potato And Bean Stew",
+        "line2": "Like a small child, or your basil plant for the first two weeks, this dish is a grower. It’s a spiced bean, potato, and carrot stew served with rice and vegan cheese."
+      },
+      {
+        "line1": "Dessert Plate",
+        "line2": "Make sure you save room for dessert at Persepolis. The plate that comes with the tasting menu has an ice cream sundae, paklava, fresh fruit, and a cookie."
+      }
+    ]
+  },
+  "rovi": {
+    "name": "rovi",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "13 Places To Go For A Drink When You’re Not Drinking",
+      "Where To Eat When You’re Already Full",
+      "14 Great Places To Eat Something Light And Kind Of Healthy",
+      "Where To Go With A Picky Friend"
+    ],
+    "review": "Ask anyone into sci-fi films what we’ll be eating in the future, and they’ll say one of two things: protein gruel, or noodles. Whether it’s from Terry Gilliam’s mind or Ridley Scott’s, the consensus is clear. One day, our dining habits will resemble those of a Ladbible aficionado. It’s going to be a pretty sorry state of affairs. Or, maybe it won’t be, if Rovi - the restaurant from Yotam Ottolenghi - is anything to go by. There’s something of the not too distant future about Rovi. Its menu is primarily vegetables, and the method of cooking is, basically, fire. Things like corn ribs with apricot sauce feel like a conscious decision. As if the people here know about a future we don’t. A pig uprising. A boar war. But actually, it’s just that they’re good enough to not really bother with meat. A lot of the menu reads straightforward at first. The main ingredients are familiar - grilled onions, squash, beetroot - but made complicated by the spices and sauces they’re paired with. If Cormac McCarthy had come to Rovi, all sorts of grim things could have been avoided in The Road. What we’re trying to say is this: in a dystopian future, we should all be thinking about scorched tomatoes with yoghurt, or charred peppers with polenta. Sod a human shawarma. Have a celeriac one instead. Lots about this restaurant is familiar and welcoming. It’s five minutes from Oxford Circus and serves every meal of the day. The ideal post-apocalyptic haven. But it’s also, and not in an exclusive-show-offy way, different. Not just for its all-day accessibility, but for the way they make certain things so delicious. To the point that you just keep going on and on about it all. There is meat and fish here, but it’s all about the vegetables. Where else are you going to have tempura herbs? Or red cabbage that tastes like this? What about those spiced butter beans they give you at the bar? And that gooey beetroot and chocolate fondant you said you didn’t have room for. Trust us. You’ll go on, and on. There’s a touch of the eco-futures about the space. It’s simultaneously modern and retro. As if Deckard from Blade Runner went on Grand Designs feeling all sustainable. It’s big, light, with lots of wood, and some coloured art deco touches. In fact, the whole place just feels quite filmic. Everything runs as it should do, and there are endless characters at the bar and sitting on the curved sofa seats. It’s buzzing and active, with a never ending loop of extras. The best thing about Rovi is that although it feels a little futuristic, it’s very much in the present. It’s a restaurant full of familiar things done differently, and ideal for anyone, at any time, which is what all restaurants present and future should be aiming for, really. But anyway, why are you still reading this? You could be eating a celeriac shawarma. Right. Now.",
+    "food_rundown": [
+      {
+        "line1": "Tempura Stems And Herbs",
+        "line2": "This is the best tempura we’ve ever had. The szechuan vinegar is like being tasered in the mouth. But in a good way."
+      },
+      {
+        "line1": "Crumpet Lobster Toast",
+        "line2": "This is the cumpet's next evolutionary stage. This is a crumpet at the pub after watching half a TED talk. It’s crumpet 2.0."
+      },
+      {
+        "line1": "Corn Ribs, Apricot Sauce, Chipotle Salt",
+        "line2": "‘But they can’t be ribs if they’re not from an animal’. Says everyone before eating these and promptly shutting up."
+      },
+      {
+        "line1": "Hot Tomatoes, Yoghurt, Urfa Chilli",
+        "line2": "Everything about this plate glistens. The tomatoes lolling in their own juices. Their yoghurt duvet. The charred and oily bread soldiers. Your eyes looking at the plate. The person at the opposite table salivating."
+      },
+      {
+        "line1": "Spaghetti Squash, Ezme, Mandarin Yoghurt",
+        "line2": "The spiced tomato-y dip that’s plopped on this squash is excellent. In fact it’s all excellent."
+      },
+      {
+        "line1": "Red Cabbage, Gorgonzola, Grapes",
+        "line2": "Brits often only associate red cabbage with roasts and Christmas dinner. After you eat this, you’ll realise how backwards we are."
+      },
+      {
+        "line1": "Peppers, White Polenta, Yolk Bottarga",
+        "line2": "This genuinely looks like peppers and gruel. But it’s got a kick to it as well. If this what the future holds, then sign us up."
+      },
+      {
+        "line1": "Hasselback Beetroot, Lime Cream, Herb Salsa",
+        "line2": "Hasselback sounds like a dad shouting on the sidelines at a Sunday league game, but it’s just slicing something very thinly, so that it has pages, almost. We’d want lots and lots of pages of this beetroot."
+      },
+      {
+        "line1": "Celeriac Shawarma, Bkeila, Fermented Tomato",
+        "line2": "We are enormous advocates of shawarmas and all of their kebab brethren. A celeriac one though? Really? Yes really. It’s up there with the best. Even your 1am favourites."
+      },
+      {
+        "line1": "Squid And Lardo Skewer",
+        "line2": "We’ve banged on about the vegetables at Rovi, but if there’s one meat or fish to order, it’s this. A melt in your mouth skewer."
+      },
+      {
+        "line1": "Onglet Skewers, Chilli, Peanuts",
+        "line2": "Onglet isn’t our favourite cut of beef, but these are nice enough. Though your money and time is much better spent on other things."
+      },
+      {
+        "line1": "Plum And Juniper Doughnuts, Bay Leaf Cream",
+        "line2": "In theory these are cute and great. In reality there a bit disappointing and sad. Like a dog wearing Uggs."
+      },
+      {
+        "line1": "Beetroot And Chocolate Fondant",
+        "line2": "Very gooey and very good. You should absolutely be finishing your meal with this."
+      }
+    ]
+  },
+  "jam-delish": {
+    "name": "jam-delish",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The 21 Best Vegan Restaurants In London",
+      "The Best Restaurants In Islington",
+      "Where To Eat Caribbean Food In London",
+      "Jam Delish, a vibrant vegan Caribbean spot in Islington, has the kind of Good Times energy that will enable a round of colourful cocktails, even on a Tuesday night. It’s loud—in its blue velvet upholstery, foliage-covered wall, lively dining room, and turned-up R&B playlist—and proudly a place where everyone leaves full and revived. You could make a meal from small plates like ‘fish’ tacos and whole jerk plantain with sharp pomegranate, but don’t miss mains like incredibly tender, warming ‘oxtail’ (jackfruit and mushroom) stew. That said, it’s really the buzz of the place and welcoming hospitality that’ll lift your spirits."
+    ],
+    "review": ""
+  },
+  "tofu-vegan": {
+    "name": "tofu-vegan",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The 21 Best Vegan Restaurants In London",
+      "The Best Restaurants In Islington",
+      "The Best Of The Rest: 28 More New London Restaurants We Loved This Year",
+      "The 10 Best Dim Sum Restaurants In London"
+    ],
+    "review": "It’s rare that a specialist all-vegan restaurant makes as big and as positive (sorry, By Chloe ) an impact on London’s eating scene as Tofu Vegan has. The new Chinese spot on Upper Street is heaving seven days a week, as everyone tucks into house-made silken tofu in Szechuan sauce, mock meats like Chongqing chicken, dim sum, and much more plant-based fare that may surprise you with how impressive it is. More fool us, we guess. The space is big, so much so that it spills out onto the pavement, much like the sizzling fish-fragrant sauce that will likely fall from your greedy spoonfuls, and, considering the scarcity of actually good places to eat on the Angel-end of Upper Street, it’s no wonder this place is as bustling as it is."
+  },
+  "facing-heaven": {
+    "name": "facing-heaven",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The 21 Best Vegan Restaurants In London",
+      "London's Standout LGBTQIA+-Owned Restaurants & Bars",
+      "A dining room bathed in red and green light. A single fake red or white rose on every table. Black and white chequered flooring. A disco ball and life-sized mannequin in the bathroom. No, this isn’t a",
+      "Twin Peaks"
+    ],
+    "review": "-esque fever dream. It’s Facing Heaven. The reincarnation of tiny vegan Chinese spot Mao Chow is just around the corner from the original Hackney location, with the same slightly-chaotic-but-fun charm as its predecessor. And it’s still cosy. If you don’t want to bump elbows or backs with your neighbour, nab one of the few ‘proper’ tables and chairs. But sitting on a low stool at the formica table that runs the length of the front, people-watching out of the big windows, has its advantages. And when chilli oil inevitably splatters everywhere while you’re enthusiastically eating mock-pork dumplings drenched in kicking chilli flake-infused oil, garlic-heavy stir-fried chrysanthemum and black pudding (actually tofu), and scooping up bouncy, cold XO noodles, this is the kind of spot where a messy table doesn't really matter."
+  },
+  "tendril": {
+    "name": "tendril",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "Where To Eat When You’re Gluten-Free & Don’t Want To Play Another Round Of Dish Detective",
+      "The 21 Best Vegan Restaurants In London",
+      "The 15 Best Restaurants In Mayfair",
+      "Where To Go When You Just Want Tiramisu"
+    ],
+    "review": "At Tendril in Mayfair, small details—an unexpected but welcome swirl of chilli oil, the staff bantering with you about your dessert order, the flattering lighting—are treated like big things. On paper the Asian and Middle Eastern menu sounds quite basic, but these dishes have become regular fixtures in our food dreams. This isn't just one of the best places to eat this close to the human washing machine that is Oxford Circus station, it's one of the best places to eat vegetable dishes in London . Don’t let the townhouse exterior or the red Lamborghini that may or may not be parked outside fool you. Mayfair postcode or not, Tendril is a place where all are welcome. Your friend who has been vowing to cut down on meat will love it. So will any parent who refuses to download Citymapper and must be within two minutes of a station or else they’ll be lost forever. Towards the front, the dining room is calm and a little sedate, so book the back section if you like your music a little louder, colour palette more seductive, and seating on the intimate side. For groups, there’s a toffee-coloured booth back here that’s easily the best seat in the house. Overlooking the tables of two and beside the bar, it’s a see and be seen kind of seat, made for sipping cocktails and laughing harder than necessary at your friend’s disaster date story. The bookshelves, lined with genteel titles like Little Dorrit and An English Hymnal , make it seem like you’ve stumbled across the private home of a home counties art director—but this buzzy spot requires booking, especially for a prime table towards the end of the week. Really, our love of Tendril all goes back to our first scoop of white bean spread that made us question our long-term commitment to hummus. The set menu is plentiful, and if you go à la carte, you'll be having such a charming time that it just makes sense to stay for dessert. With every creamy, chocolatey (dairy-free) mouthful of tiramisu, consider the transformation of any plant-based sceptics at your table complete.",
+    "food_rundown": [
+      {
+        "line1": "White Bean Spread",
+        "line2": "When your teacher told you not to judge a book by its cover they probably weren’t thinking of white bean spread, but it still applies. It’s hard to make a white, smooth paste look appetising—so ignore its appearance and dunk, swirl, and dunk some more. We love the addition of fiery chilli oil which punches up the subtle, nutty flavour of the spread."
+      },
+      {
+        "line1": "Crispy Potato & Fennel Remoulade",
+        "line2": "Tendril’s remoulade is served with an artful smear of aioli that’ll weed out vampires. We want this ferocity from every garlicky mayonnaise. The creamy, crunchy fennel pairs well with the deep-fried, layered potatoes. A mouthful of all these things is our dream snack."
+      },
+      {
+        "line1": "Baked Feta",
+        "line2": "A rare miss on the menu. Unless you’re a real feta-head, this is quite monotonous to eat. We like the addition of crispy rice and the drizzle of sesame-speckled honey, but even that isn’t enough to make this feel like we’re not trudging through a block of cheese."
+      },
+      {
+        "line1": "‘Chinatown’ Purple Potatoes",
+        "line2": "These vibrant, slightly spicy, purple potatoes are cut into tiny crispy cubes and doused in a sticky, sweet sesame glaze. The addition of the sesame cracker shard adds a nice crunch."
+      },
+      {
+        "line1": "Baked Brie & Truffle Toast",
+        "line2": "A much more successful take on baked cheese than the feta, this is a small square of excellent cheese toastie. It’s gooey and oozing, the truffle is decadent, and we can totally see why you’d keep cheese on the otherwise vegan menu just for this dish."
+      },
+      {
+        "line1": "Chipotle Mushrooms",
+        "line2": "We know that people who describe mushrooms as ‘meaty’ are a walking ick, but these mushrooms are in fact meaty. They come on a skewer, have a charred taste, and pull apart pleasingly. They’re not a must-order, but they’ll satisfy anyone who comes to this mostly plant-based spot begrudgingly."
+      },
+      {
+        "line1": "Stuffed Courgette With Pilaf Rice & Feta",
+        "line2": "We weren’t a fan of these courgettes which were cut too thickly for our liking and weren’t very flavoursome. The filling was also forgettable. There are so many other great things on the menu, so swerve these."
+      },
+      {
+        "line1": "Roasted Carrots, Orange, Crispy Rice",
+        "line2": "Remember when people used to eat boiled carrots—sad times. These are burnished and golden, with crispy, craggy edges and a nice citrus hit of orange juice to keep things from feeling heavy or oily."
+      },
+      {
+        "line1": "Celeriac Terrine & Remoulade",
+        "line2": "One of the best celeriac dishes we’ve ever had. What’s not to like about a fried, crispy coating, soft pieces of celeriac which melt in the mouth, and a smoky harissa sauce to mop up every bite? Nothing. Naysayers will say deep-fried vegetables are a cop out. We disagree."
+      },
+      {
+        "line1": "Tiramisu",
+        "line2": "A vegan tiramisu is always going to be compared to a dairy version. But this isn’t just good for a vegan tiramisu. It’s a tiramisu you should seek out even if lactose is your one true love. We like the balance of coffee and the whole thing is light. Like other dishes, portions veer to the generous side so we'd suggest sharing if you’re already feeling pretty full but don’t want to miss out."
+      }
+    ]
+  },
+  "lahpet-west-end": {
+    "name": "lahpet-west-end",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "included_in": [
+      "The 23 Best Restaurants In Covent Garden",
+      "Where To Eat When You’re Gluten-Free & Don’t Want To Play Another Round Of Dish Detective",
+      "Where To Eat When You’re Shopping In London",
+      "The 17 Best Restaurants In The West End"
+    ],
+    "review": "There are restaurants that are perfect for very specific situations. Say, that steakhouse that is so loud and obnoxious that you’re not even going to hear your boss complaining about something they keep referring to as OKRs. And then, there are restaurants that are perfect for literally everyone. Lahpet in Covent Garden is that restaurant. They already have their original restaurant in Shoreditch, but in our opinion their Covent Garden offering is bigger, better, and importantly, tastier. Downstairs you’ve got a buzzing open kitchen and big sharing tables that are perfect for anyone who’s on a solo mission to eat some excellent noodle soup. Upstairs, the lighting is a little moodier and there are lots of two-person tables that will suit a date night involving supersized king prawns, several small plates, and a round of their pickled tea take on a classic martini. Expect great vegan options, gluten-free numbers, and enough ginger to shock you out of your urban blues. Plus, they’re open from midday on weekends so it’s also a great option if you’re looking for some delicious post-retail sustenance."
+  },
+  "holy-carrot": {
+    "name": "holy-carrot",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "review": "Drinks & A Light Bite Vegetarians Vegans Jake Missing August 30, 2024 Portobello Road has always been painted as a little bit bohemian, but right in the middle there’s a handful of burger chains as well an intergalactic-looking restaurant on the corner. That place is Holy Carrot. So much about this vegan restaurant is intended to make you turn your head. There are smooth lines and silver furniture, cocktails are supplied by A Bar With Shapes For A Name , and when we visited, the menu had no less than three mentions of the word ‘crema’. Micro-influencers recline against the curved walls, while the rest of the clientele feels  like the segment of the Notting Hill set who are really into bangles. Surfer-vibe, jewellery-clad servers will enthusiastically serve you grilled watermelon and cucumber—a wealthy adult’s version of a child’s fruit salad, for all intents and purposes—and a plate of celeriac schnitzel arrives looking like a flower bed. It’s all one-note and fine. Heavy on vinegar or light on togarashi. And the matcha tiramisu, although satisfying and notably made with Holy Carrot’s leftover coffee grinds, is just not a tiramisu. Come for a cocktail or a snack or two. It feels like you’re eating on Virgin Galactic, now.",
+    "food_rundown": [
+      {
+        "line1": "Grilled Watermelon, Cucumber, Seaweed, Togarashi",
+        "line2": "An adult fruit salad, for all intents and purposes. Not as sweet as a can made by the man from Del Monte but, equally, not as good either. This is a refreshing bowl of cubed watermelon with a smattering of togarashi and salty dressing at the bottom. There’s not much to it."
+      },
+      {
+        "line1": "Crispy Celeriac, Pickle Butter",
+        "line2": "Is that a miniature meadow of wild flowers? Or are those two slightly odd discs of celeriac schnitzel with a load of leftovers from the florist thrown over them? More so the latter. This isn’t a bad plate of food but it’s a bit of an odd one. The schnitzel is fine and the pickle sauce is just whizzed vinegaryness."
+      }
+    ]
+  },
+  "paladar": {
+    "name": "paladar",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The 15 Best Restaurants In Elephant And Castle",
+      "London's Standout LGBTQIA+-Owned Restaurants & Bars",
+      "14 London Restaurants That Will Give You That Holiday Feeling",
+      "The Best London Restaurants With Secret Gardens & Hidden Patios"
+    ],
+    "review": "Homeliness and comfort go hand in hand, only at Paladar they also throw in a mean margarita and some of London’s juiciest cochinita pibil. The queer-owned Latin American bar and restaurant in Elephant and Castle is something of a vibes merchant. The walls are covered with knickknacks, the staff emit a happy glow that you’ll want to absorb via osmosis, and the drinks flow inside the restaurant and their hush-hush courtyard. The menu spans dinky jackfruit empanadas with a smoky serrano chilli sauce, to ceviche and tostadas, to purple corn churros. Don’t miss the cochinita pibil—four gloriously tender pulled pork tacos that you won't want to share."
+  },
+  "wave": {
+    "name": "wave",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The Best Coffee Shops For Getting Work Done",
+      "A Definitive Guide To London’s Best Pancakes",
+      "Wave feels like the kind of cafe you'd find inside an LA health spa. Until you see pigeons scrapping over a chicken wing outside and remember that you are, in fact, in Hackney. The menu is vegan (and great for those with other dietary requirements too), the tones are earthy, the material of choice is rattan, and coffees come with lion’s mane, cordyceps, CBD, and other things influencers told you would make your skin glow. During the week it’s a calming spot to get some work done over a delicious salted—Himalayan, of course—coffee. And on sunny days, baseball cap-wearing Hackney locals pile into the courtyard, not a hangover in sight, photographing açai bowls and likely setting their intentions for the week. The food can be hit and miss, but the pillowy, gluten-free pancakes always hit, so stick to those.",
+      "photo credit: The exterior of Wave, a Hackney cafe."
+    ],
+    "review": ""
+  },
+  "nopi": {
+    "name": "nopi",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "review": "Birthdays Brunch Gluten-Free Options Keeping It Kind Of Healthy Vegetarians DP David Paw August 22, 2022 Nopi, Yotam Ottolenghi’s upscale restaurant in Soho, is Perfect For any time you need to impress someone but also not look like you’re trying too hard. It’s the restaurant equivalent of, ‘oh, this old thing?’. The Middle Eastern/Mediterranean sharing plates lean towards being mostly vegetarian and are uniformly tasty. They're where the best action is. Get the courgette fritters or burrata with blood orange."
+  },
+  "bob-bob-ricard": {
+    "name": "bob-bob-ricard",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "Where To Eat In Soho After 11pm",
+      "Where To Go When You Want To Get Dressed Up",
+      "The Best Places To Eat Lobster In London",
+      "Eleven Restaurants To Go To When You’re Not Paying"
+    ],
+    "review": "Bob Bob Ricard is a larger-than-life Soho spot that falls firmly into the category of ‘you should try everything once’. That goes for their ‘push for champagne’ button, the caviar dégustation that you’ll never financially recover from, and the signature golden chocolate glory orb, which melts impressively in front of you like your plans to return. The taste levels at this modern European spot are questionable—depending where you stand on the gold, velvet, mobster’s palace look. But it’s all very fun in an extravagant, ‘blow the budget’ kind of way. Plus, the food is lovely. Salty, soft pork belly in particular, with a crispy pork quaver, is almost worth returning for. Almost. But ultimately it feels like a one and done spot—the kind of showy backdrop that works well for semi-ironic, big birthday celebrations or impressing out-of-towners. We much prefer its chicken-and-chips sibling, Bébé Bob ."
+  },
+  "barrafina-drury-lane": {
+    "name": "barrafina-drury-lane",
+    "categories": [
+      "Vegetarian",
+      "Middle Eastern",
+      "Spitalfields"
+    ],
+    "price_level": "$$$$",
+    "perfect_for": [],
+    "included_in": [
+      "The 23 Best Restaurants In Covent Garden",
+      "8 Great Covent Garden Restaurants For Outdoor Dining",
+      "Where To Eat When You Want A Bit Of This & A Bit Of That (In The Sunshine)",
+      "London’s Best Private Dining Rooms"
+    ],
+    "review": "Of all Barrafina’s London locations, it’s the Covent Garden one you want to be at when the sun is shining. The swish Spanish tapas spot has a pavement-side terrace that suits lunchtime cava-drinking and pan con tomate-inhaling. Inside, an elegant marble-top counter buzzes with conversation from dates, after-work dinners, and smiling chefs alike—it’s a restaurant more casual than some of its prices suggest. Once upon a time, Barrafina was a put-your-name-down, cross-your-fingers-and-pray type place, but these days the Drury Lane restaurant is bookable. The food is all still very nice: the tortilla is gooey, the bravas saucy, and the fish and meat are perfectly cooked. Pay attention to the specials as there's usually a razor clam or a skate dish that screams summer and a rioja too many. There are few more buzzy bars for a great meal in London that fit the brief of impressive, but not overly special-feeling. And for that reason Barrafina should always be in your back pocket."
+  }
+}

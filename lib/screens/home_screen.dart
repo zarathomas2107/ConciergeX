@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:ui' show ImageByteFormat, PictureRecorder, TextDirection;
 import '../models/restaurant.dart';
 import '../widgets/restaurant_card.dart';
@@ -36,6 +37,7 @@ class HomeScreenState extends State<HomeScreen> {
   bool _showMap = false;
   double _venueLat = 51.5073219;  // Default to London
   double _venueLon = -0.1276474;
+  String? _currentLocationName;
   Set<Marker> _markers = {};
   DateTime? _currentStartDate;
   DateTime? _currentEndDate;
@@ -46,17 +48,12 @@ class HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _groupSuggestions = [];
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
+  bool _loadingLocation = false;
   
   late final CameraPosition _initialCameraPosition = CameraPosition(
     target: LatLng(_venueLat, _venueLon),
     zoom: 14.0,
   );
-
-  final Map<String, Map<String, double>> locationCoords = {
-    'Covent Garden': {'lat': 51.5117, 'lon': -0.1240},
-    'Soho': {'lat': 51.5137, 'lon': -0.1337},
-    'Lyceum': {'lat': 51.5115, 'lon': -0.1200},
-  };
 
   @override
   void initState() {
@@ -65,44 +62,136 @@ class HomeScreenState extends State<HomeScreen> {
     _filteredRestaurants = _restaurants;
     _searchController.addListener(_onSearchChanged);
     
-    // Create markers for initial restaurants
-    for (final restaurant in _restaurants) {
-      if (restaurant.latitude != 0 && restaurant.longitude != 0) {
-        _createCustomMarker(restaurant.name).then((customMarker) {
-          if (mounted) {
-            setState(() {
-              _markers.add(
-                Marker(
-                  markerId: MarkerId(restaurant.id),
-                  position: LatLng(restaurant.latitude, restaurant.longitude),
-                  icon: customMarker,
-                  anchor: const Offset(0.5, 0.5),
-                  infoWindow: InfoWindow(
-                    title: restaurant.name,
-                    snippet: restaurant.distance != null 
-                        ? '${restaurant.cuisineTypes.join(' • ')} • ${(restaurant.distance! / 1000).toStringAsFixed(1)}km'
-                        : restaurant.cuisineTypes.join(' • '),
-                  ),
-                ),
-              );
-            });
-          }
-        });
-      }
-    }
-
+    // Delay getting location to avoid map creation issues
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      setState(() {
-        _showMap = true;
-      });
-      _updateMap();
+      _getCurrentLocationAndRestaurants();
     });
   }
 
+  Future<void> _getCurrentLocationAndRestaurants() async {
+    setState(() => _loadingLocation = true);
+
+    try {
+      // Request location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permission denied');
+        }
+      }
+
+      // Get current position
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high
+      );
+      
+      debugPrint('Got current position: lat=${position.latitude}, lon=${position.longitude}');
+
+      if (!mounted) return;
+
+      setState(() {
+        _venueLat = position.latitude;
+        _venueLon = position.longitude;
+        _currentLocationName = 'Current Location';
+        _showMap = true;
+      });
+
+      // Update map camera
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(_venueLat, _venueLon),
+            zoom: 15.0,
+          ),
+        ),
+      );
+
+      // Format the current location as a point string
+      final pointStr = 'POINT(${position.longitude} ${position.latitude})';
+      debugPrint('Searching with point: $pointStr');
+      
+      // Get today's date in YYYY-MM-DD format
+      final today = DateTime.now();
+      final dateStr = today.toIso8601String().split('T')[0];
+      
+      debugPrint('Fetching restaurants within 5km of current location');
+      final response = await _supabase
+          .rpc('get_restaurants_within_distance_v4', params: {
+            'ref_point': pointStr,
+            'max_distance': 5000.0,
+            'excluded_cuisines': [],
+            'required_cuisines': ['Vegetarian'],
+            'start_date_str': dateStr,
+            'end_date_str': dateStr,
+            'start_time_str': '09:00:00',
+            'end_time_str': '22:00:00'
+          });
+          
+      debugPrint('Got response from Supabase: $response');
+
+      if (!mounted) return;
+
+      // Debug log for raw data
+      if (response is List && response.isNotEmpty) {
+        final firstRestaurant = response.first as Map;
+        debugPrint('First restaurant raw data: $firstRestaurant');
+        debugPrint('First restaurant name: ${firstRestaurant['name']}');
+        debugPrint('First restaurant cuisine types: ${firstRestaurant['cuisine_type']}');
+        debugPrint('First restaurant vegetarian scale: ${firstRestaurant['vegetarian_scale']}');
+      }
+
+      final restaurants = (response as List)
+          .map((r) => Restaurant.fromJson(r as Map<String, dynamic>))
+          .toList();
+          
+      debugPrint('Parsed ${restaurants.length} restaurants');
+      if (restaurants.isNotEmpty) {
+        debugPrint('First restaurant: ${restaurants.first.name}');
+        debugPrint('First restaurant vegetarian scale: ${restaurants.first.vegetarianScale}');
+      }
+
+      setState(() {
+        debugPrint('Setting state with ${restaurants.length} restaurants');
+        _filteredRestaurants = restaurants;
+        _isSearching = false;
+        _hasSearched = true;
+        debugPrint('State updated, filtered restaurants: ${_filteredRestaurants.length}');
+      });
+
+      debugPrint('Updating map with ${restaurants.length} restaurants');
+      // Update map with all restaurants
+      _updateMap();
+
+    } catch (e, stackTrace) {
+      debugPrint('Error getting location or restaurants: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading nearby restaurants: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingLocation = false);
+      }
+    }
+  }
+
   void _onMapCreated(GoogleMapController controller) {
+    if (_mapController != null) {
+      debugPrint('Map controller already exists, disposing old one');
+      _mapController!.dispose();
+    }
     _mapController = controller;
-    // Only update map if markers are empty
-    if (_markers.isEmpty) {
+    debugPrint('New map controller created');
+    
+    // Only update map if we have markers to show
+    if (_markers.isNotEmpty) {
+      debugPrint('Updating map with existing markers');
       _updateMap();
     }
   }
@@ -146,15 +235,15 @@ class HomeScreenState extends State<HomeScreen> {
   Future<BitmapDescriptor> _createVenueMarker() async {
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
-    const size = Size(60, 60);  // Reduced from 400x400
+    const size = Size(80, 80);  // Increased from 60x60
 
     final circlePaint = Paint()
-      ..color = Colors.red.withOpacity(0.8)
+      ..color = Colors.green.withOpacity(0.8)
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(
-      const Offset(30, 30),  // Adjusted position
-      25,  // Reduced from 150
+      const Offset(40, 40),  // Adjusted for new size
+      35,  // Increased from 25
       circlePaint,
     );
 
@@ -166,97 +255,110 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _updateMap() async {
-    if (_mapController == null) return;
-
-    setState(() {
-      _markers.clear();
-    });
-      
-    // Use filtered restaurants if search has been performed, otherwise show all restaurants
-    final restaurantsToShow = _hasSearched ? _filteredRestaurants : _restaurants;
+    if (!mounted) return;
+    debugPrint('Starting _updateMap with ${_filteredRestaurants.length} restaurants');
     
-    for (final restaurant in restaurantsToShow) {
-      if (restaurant.latitude != 0 && restaurant.longitude != 0) {
-        final customMarker = await _createCustomMarker(restaurant.name);
-        if (mounted) {
-          setState(() {
-            _markers.add(
-              Marker(
-                markerId: MarkerId(restaurant.id),
-                position: LatLng(restaurant.latitude, restaurant.longitude),
-                icon: customMarker,
-                anchor: const Offset(0.5, 0.5),
-                infoWindow: InfoWindow(
-                  title: restaurant.name,
-                  snippet: restaurant.distance != null 
-                      ? '${restaurant.cuisineTypes.join(' • ')} • ${(restaurant.distance! / 1000).toStringAsFixed(1)}km'
-                      : restaurant.cuisineTypes.join(' • '),
-                ),
-                onTap: () {
-                  final index = restaurantsToShow.indexOf(restaurant);
-                  if (index != -1) {
-                    _scrollController.animateTo(
-                      index * (MediaQuery.of(context).size.width * 0.95 + 16),
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                },
-              ),
-            );
-          });
-        }
+    final newMarkers = <Marker>{};
+    
+    for (final restaurant in _filteredRestaurants) {
+      try {
+        final marker = Marker(
+          markerId: MarkerId(restaurant.id),
+          position: LatLng(restaurant.latitude, restaurant.longitude),
+          infoWindow: InfoWindow(
+            title: restaurant.name,
+            snippet: restaurant.address,
+          ),
+        );
+        newMarkers.add(marker);
+      } catch (e) {
+        debugPrint('Error creating marker for ${restaurant.name}: $e');
       }
     }
+    
+    setState(() {
+      _markers = newMarkers;
+    });
   }
 
   Future<void> _filterRestaurants(SearchResponse searchResponse) async {
     try {
       if (searchResponse.restaurants.isNotEmpty) {
-        setState(() {
-          _isSearching = false;
-          _hasSearched = true;
-          _filteredRestaurants = searchResponse.restaurants;
+        // Get datetime from root level of response first
+        final datetime = searchResponse.datetime;
+        debugPrint('Got datetime from response: $datetime');
+        
+        // Set the date range before filtering
+        if (datetime != null) {
+          final startDateStr = datetime['start_date'] as String?;
+          final endDateStr = datetime['end_date'] as String?;
           
-          // Get datetime from root level of response
-          final datetime = searchResponse.datetime;
-          debugPrint('Got datetime from response: $datetime');
+          if (startDateStr != null && endDateStr != null) {
+            try {
+              _currentStartDate = DateTime.parse(startDateStr);
+              _currentEndDate = DateTime.parse(endDateStr);
+              debugPrint('Set date range from response: $_currentStartDate to $_currentEndDate');
+            } catch (e) {
+              debugPrint('Error parsing date strings: $e');
+              _currentStartDate = DateTime.now();
+              _currentEndDate = DateTime.now();
+            }
+          }
           
-          if (datetime != null) {
-            // Parse the datetime info from backend
-            final startTimeStr = datetime['start_time'] as String?;
-            final endTimeStr = datetime['end_time'] as String?;
-            final startDateStr = datetime['start_date'] as String?;
-            final endDateStr = datetime['end_date'] as String?;
-            
-            if (startTimeStr != null && endTimeStr != null) {
-              // Parse time strings in format HH:MM:SS
+          final startTimeStr = datetime['start_time'] as String?;
+          final endTimeStr = datetime['end_time'] as String?;
+          
+          if (startTimeStr != null && endTimeStr != null && startTimeStr.contains(':') && endTimeStr.contains(':')) {
+            try {
               final startTimeParts = startTimeStr.split(':');
               final endTimeParts = endTimeStr.split(':');
               
-              _currentStartTime = TimeOfDay(
-                hour: int.parse(startTimeParts[0]),
-                minute: int.parse(startTimeParts[1]),
-              );
-              
-              _currentEndTime = TimeOfDay(
-                hour: int.parse(endTimeParts[0]),
-                minute: int.parse(endTimeParts[1]),
-              );
+              if (startTimeParts.length >= 2 && endTimeParts.length >= 2) {
+                _currentStartTime = TimeOfDay(
+                  hour: int.parse(startTimeParts[0]),
+                  minute: int.parse(startTimeParts[1]),
+                );
+                
+                _currentEndTime = TimeOfDay(
+                  hour: int.parse(endTimeParts[0]),
+                  minute: int.parse(endTimeParts[1]),
+                );
+                
+                debugPrint('Set time range from response: ${_currentStartTime?.format(context)} to ${_currentEndTime?.format(context)}');
+              }
+            } catch (e) {
+              debugPrint('Error parsing time strings: $e');
+              _currentStartTime = const TimeOfDay(hour: 9, minute: 0);
+              _currentEndTime = const TimeOfDay(hour: 22, minute: 0);
             }
-            
-            if (startDateStr != null && endDateStr != null) {
-              _currentStartDate = DateTime.parse(startDateStr);
-              _currentEndDate = DateTime.parse(endDateStr);
-            }
-            
-            debugPrint('Updated datetime parameters:');
-            debugPrint('  start_date: $_currentStartDate');
-            debugPrint('  end_date: $_currentEndDate');
-            debugPrint('  start_time: ${_currentStartTime?.format(context)}');
-            debugPrint('  end_time: ${_currentEndTime?.format(context)}');
           }
+        }
+
+        // Filter restaurants to only show those with available slots
+        final restaurantsWithSlots = searchResponse.restaurants.where((restaurant) {
+          final slots = restaurant.getAvailableSlotsInRange(
+            _currentStartDate ?? DateTime.now(),
+            _currentEndDate ?? DateTime.now(),
+            _currentStartTime ?? const TimeOfDay(hour: 9, minute: 0),
+            _currentEndTime ?? const TimeOfDay(hour: 22, minute: 0),
+          );
+          debugPrint('Checking slots for ${restaurant.name}: ${slots?.length ?? 0} slots found');
+          debugPrint('Using date range: ${_currentStartDate} to ${_currentEndDate}');
+          debugPrint('Using time range: ${_currentStartTime?.format(context)} - ${_currentEndTime?.format(context)}');
+          return slots != null && slots.isNotEmpty;
+        }).toList();
+
+        setState(() {
+          _isSearching = false;
+          _hasSearched = true;
+          _filteredRestaurants = restaurantsWithSlots;
         });
+
+        debugPrint('Found ${restaurantsWithSlots.length} restaurants with available slots');
+        
+        if (restaurantsWithSlots.isEmpty) {
+          _showNoRestaurantsMessage();
+        }
         
         // Update map markers to show only filtered restaurants
         _updateMap();
@@ -266,6 +368,8 @@ class HomeScreenState extends State<HomeScreen> {
           _isSearching = false;
           _hasSearched = true;
         });
+        
+        _showNoRestaurantsMessage();
         
         // Clear all restaurant markers when no results
         _updateMap();
@@ -278,9 +382,28 @@ class HomeScreenState extends State<HomeScreen> {
         _hasSearched = true;
       });
       
+      _showNoRestaurantsMessage();
+      
       // Clear all restaurant markers on error
       _updateMap();
     }
+  }
+
+  void _showNoRestaurantsMessage() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Restaurant Search is not currently available in your local area. Try searches in Soho, Shoreditch, Hackney & London Bridge.',
+          style: TextStyle(color: Colors.white),
+        ),
+        duration: Duration(seconds: 5),
+        backgroundColor: Colors.black87,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, 100),
+      ),
+    );
   }
 
   void _showAvailabilityDialog(Restaurant restaurant, List<AvailabilitySlot> slots) {
@@ -314,14 +437,15 @@ class HomeScreenState extends State<HomeScreen> {
         _currentEndDate = null;
         _currentStartTime = null;
         _currentEndTime = null;
-        _showMap = true;  // Ensure map stays visible on reset
+        _currentLocationName = null;
+        _showMap = true;
       });
       return;
     }
 
     setState(() {
       _isSearching = true;
-      _showMap = true;  // Keep map visible while searching
+      _showMap = true;
     });
 
     try {
@@ -332,27 +456,46 @@ class HomeScreenState extends State<HomeScreen> {
         debugPrint('Search response location: ${searchResponse.location}');
         debugPrint('Found ${searchResponse.restaurants.length} restaurants');
         
-        setState(() => _showMap = true);  // Ensure map stays visible after search
+        // Store query and response in Supabase
+        try {
+          await _supabase.from('user_queries').insert({
+            'user_id': userId,
+            'query': query,
+            'llm_response': {
+              'location': searchResponse.location,
+              'datetime': searchResponse.datetime,
+              'num_restaurants': searchResponse.restaurants.length,
+              'venue_lat': searchResponse.venueLat,
+              'venue_lon': searchResponse.venueLon,
+            },
+          });
+        } catch (e) {
+          debugPrint('Error storing query in Supabase: $e');
+          // Continue with search even if storing fails
+        }
+        
+        setState(() => _showMap = true);
         
         // Update venue location if provided
-        if (searchResponse.location != null) {
-          debugPrint('Location data: ${searchResponse.location}');
-          final locationStr = searchResponse.location!['address'] as String?;
-          if (locationStr != null && locationStr.isNotEmpty) {
-            // Parse the location string which is in format 'POINT(lon lat)'
-            final coordsStr = locationStr.replaceAll('POINT(', '').replaceAll(')', '');
-            final coords = coordsStr.split(' ');
-            if (coords.length == 2) {
-              try {
-                _venueLon = double.parse(coords[0]);
-                _venueLat = double.parse(coords[1]);
-                debugPrint('Updating venue coordinates: lat=$_venueLat, lon=$_venueLon');
-                _updateMap();
-              } catch (e) {
-                debugPrint('Error parsing coordinates: $e');
-              }
-            }
-          }
+        if (searchResponse.venueLat != null && searchResponse.venueLon != null) {
+          debugPrint('Updating venue coordinates: lat=${searchResponse.venueLat}, lon=${searchResponse.venueLon}');
+          setState(() {
+            _venueLat = searchResponse.venueLat!;
+            _venueLon = searchResponse.venueLon!;
+            _currentLocationName = searchResponse.location?['name'] as String?;
+          });
+          
+          // Animate camera to new venue location
+          _mapController?.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target: LatLng(_venueLat, _venueLon),
+                zoom: 15.0,
+              ),
+            ),
+          );
+          
+          _updateMap();
         }
         
         await _filterRestaurants(searchResponse);
@@ -363,7 +506,8 @@ class HomeScreenState extends State<HomeScreen> {
         _filteredRestaurants = [];
         _isSearching = false;
         _hasSearched = true;
-        _showMap = true;  // Keep map visible even on error
+        _currentLocationName = null;
+        _showMap = true;
       });
     }
   }
@@ -484,18 +628,41 @@ class HomeScreenState extends State<HomeScreen> {
       extendBody: true,
       body: Stack(
         children: [
-          GoogleMap(
-            key: const ValueKey<String>('google_map'),
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: _initialCameraPosition,
-            markers: _markers,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-            compassEnabled: false,
-            padding: const EdgeInsets.only(bottom: 200),
-          ),
+          if (_showMap) 
+            GoogleMap(
+              key: const ValueKey<String>('home_map'),
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: _initialCameraPosition,
+              markers: _markers,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+              compassEnabled: true,
+              padding: const EdgeInsets.only(bottom: 200),
+            ),
+          if (_loadingLocation)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Finding restaurants near you...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Positioned(
             left: 0,
             right: 0,
@@ -512,21 +679,22 @@ class HomeScreenState extends State<HomeScreen> {
                       children: List.generate(
                         _filteredRestaurants.length,
                         (index) {
-                          final restaurant = _filteredRestaurants[index];
                           return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            padding: EdgeInsets.only(
+                              left: index == 0 ? 16 : 8,
+                              right: index == _filteredRestaurants.length - 1 ? 16 : 8,
+                            ),
                             child: SizedBox(
                               width: MediaQuery.of(context).size.width * 0.95,
                               child: RestaurantCard(
-                                restaurant: restaurant,
-                                startDate: _hasSearched ? _currentStartDate : null,
-                                endDate: _hasSearched ? _currentEndDate : null,
-                                startTime: _hasSearched ? _currentStartTime : null,
-                                endTime: _hasSearched ? _currentEndTime : null,
-                                onAvailabilityCheck: _hasSearched ? (slots) {
-                                  debugPrint('Showing availability dialog for ${restaurant.name} with ${slots.length} slots');
-                                  _showAvailabilityDialog(restaurant, slots);
-                                } : null,
+                                restaurant: _filteredRestaurants[index],
+                                onAvailabilityCheck: (slots) {
+                                  _showAvailabilityDialog(_filteredRestaurants[index], slots);
+                                },
+                                startDate: _currentStartDate,
+                                endDate: _currentEndDate,
+                                startTime: _currentStartTime,
+                                endTime: _currentEndTime,
                               ),
                             ),
                           );
@@ -583,10 +751,7 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    if (_mapController != null) {
-      _mapController!.dispose();
-      _mapController = null;
-    }
+    _mapController?.dispose();
     _scrollController.dispose();
     _hideGroupSuggestions();
     _overlayEntry?.remove();

@@ -1,0 +1,98 @@
+{
+  "name": "Bubala",
+  "rating": "8.5",
+  "categories": [
+    "Vegetarian",
+    "Middle Eastern",
+    "Spitalfields"
+  ],
+  "price_level": "$$$$",
+  "perfect_for": [
+    "Casual Dinners",
+    "Date Nights",
+    "Dinner with the Parents",
+    "Drinks & A Light Bite",
+    "Eating At The Bar",
+    "Keeping It Kind Of Healthy",
+    "Lunch",
+    "Vegans",
+    "Vegetarians"
+  ],
+  "included_in": [
+    "The 21 Best Vegan Restaurants In London",
+    "The Best Set Menus In London",
+    "London’s Best New Restaurants Of 2019",
+    "London's Best Private Dining Experiences For Under £50"
+  ],
+  "review": "Betting is a mug’s game. That’s what life coaches and people who always carry umbrellas will tell you. Sticking your hopes or hard-earned cash on something because of a gut feeling, or favourable percentage, or because Ray Winstone told you to ’av a bang on that, is both daft and dangerous. But it’s also exciting. Which is why some bets are worth making, and why we’re willing to bet that by the end of this review, you’ll be booking a table at Bubala. Why so confident? Well, just like a Premier League footballer with a bank account in the Cayman Islands, the numbers are on our side. Of the 14 things we’ve eaten at this vegetarian Spitalfields restaurant, 12 have been completely delicious. That’s a 98% success rate, or something. The point isn’t that we’re bad at maths, the point is that we’ve almost bitten fingers off shovelling charred laffa flatbread heaped with burnt butter hummus into our mouths. This is the kind of delicious the Middle Eastern style food at Bubala is. The kind where you become a danger to yourself. Considering the restaurant’s Spitalfields location and the surrounding area’s propensity to cause migraines, Bubala is a relative haven. The room, all pastel plastered walls and just-too-big-to-be-nickable plants, is a comfortable, canvas-like space for the colours and flavours of the menu. Nothing around you is meant to distract from the crispy but soft fried aubergine topped with dollops of tangy green zhoug, or the sweet and salty shiitake and oyster mushroom skewers. Even if there was a decorative formaldehyde prize marrow hanging above the bar, you would still find yourself focusing on the food. Where other restaurants stress how complicated everything is, Bubala does the opposite. The sharing menu stays the same day and night. And that’s a good thing. It means you and your friends will both enjoy a wedge of halloumi covered in black seed honey, at lunch or dinner, and be able to post hunger trap pictures of it on the same day.  It’s more opportunity for you to perch on the street-facing counter with just a portion of ful medames - a rich, nap-inducing bean stew topped with yoghurt and pesto - and a slice of buttery malawach for company. Or to book the bar for a dip date. You know, a date where you drink wine, get dips, and check whether there’s any adverse reaction to piling confit garlic topped labneh into your gob. Because if there is, they aren’t a keeper. Bubala’s one fault - to quote the smarmy parent of an over-achieving child - is that it’s almost too consistent. Meaning that the less plate-licking dishes like grilled cabbage or coconut sorbet, stand out like a measly B-. That’s a minor gripe though. Especially when you can eat for 30-odd quid a head here with a drink or two. And anyway, that so-so cabbage will be forgotten by the time you’re eating a scoop of tahini, date, and tangerine ice cream. It’s a mic drop so sweet, and so moreish, it will leave you thinking that Bubala isn’t just a safe bet. It’s a bloody good one.",
+  "food_rundown": [
+    {
+      "name": "Direct from Ararat bakery in Dalston, this naan-ish flatbread comes warm, slightly charred, and sprinkled with salt. You’ll want one immediately. Then one for later. And one to use as a duvet cover at home.",
+      "description": ""
+    },
+    {
+      "name": "Hummus, Pumpkin Tirshy, Labneh, Grapefruit Ezme",
+      "description": ""
+    },
+    {
+      "name": "These four dips are ordered separately, but let us save you the hassle: order all of them. The hummus is silky smooth with a healthy pool of burnt butter in the middle of it, the tirshy is sweet but savoury thanks to lemon and olives, the grapefruit ezme with tahini has a welcome crunch and sourness, while the labneh is paired with confit garlic. And as everyone knows: anything paired with confit garlic is a good thing.",
+      "description": ""
+    },
+    {
+      "name": "Fried Aubergine, Zhoug, Date Syrup",
+      "description": ""
+    },
+    {
+      "name": "A classic “it’s never like this when I do it at home” plate of food. The aubergine is crisp-like at the edges, but the insides melt in your mouth. The zhoug, loaded with coriander, is a perfect match.",
+      "description": ""
+    },
+    {
+      "name": "Ful Medames, Lovage Pesto, Yoghurt, Malawach",
+      "description": ""
+    },
+    {
+      "name": "Although this is a restaurant best suited to sharing, you could easily come here and drop a tenner on this bean stew with homemade malawich (a bread that’s buttery and pastry-ish) and leave both extremely happy and ready for bed.",
+      "description": "Shitake & Oyster Mushroom Skewers"
+    },
+    {
+      "name": "Salty. Sweet. Savoury. Soft. Seductive. Maybe not the last one, but these skewers hit all the right notes. And at £2.50, it would be rude not to.",
+      "description": ""
+    },
+    {
+      "name": "Halloumi, Black Seed Honey",
+      "description": ""
+    },
+    {
+      "name": "You look at that and you think,",
+      "description": "now that is a piece of halloumi , don’t you. An absolute slab of the most milky kind. You really, really have to be ordering this."
+    },
+    {
+      "name": "Confit Potato Latkes, Toum, Aleppo Chilli",
+      "description": ""
+    },
+    {
+      "name": "Are these latkes? Probably not. Do we care? Not remotely. These bad boys are a new entry into London’s ever growing list of Crispy And Soft Potatoes We’d Like To Eat In Bed Forever. The toum could do with a little more garlic, mind.",
+      "description": ""
+    },
+    {
+      "name": "Pomegranate Braised Cabbage, Tahini, Hazelnut",
+      "description": "A wet wedge of cabbage that gave us a minor sock in puddle flashback. It’s not bad. It’s just a little one note (tahini) and watery."
+    },
+    {
+      "name": "Tahini, Date & Tangerine Ice Cream",
+      "description": ""
+    },
+    {
+      "name": "If anyone leaves any of this you shouldn’t call the police because it’s criminal, you should call us so we can eat it for them. A nutty, sticky, and fruit-filled contender for the finest scoop around.",
+      "description": ""
+    },
+    {
+      "name": "Coconut & Cardamom Sorbet, Sumac Roast Plums",
+      "description": ""
+    },
+    {
+      "name": "This is not a bad dessert, but compared to the guy above, it’s not a hall of famer. The roasted plums are too strong for the sorbet. If you do order it, just make sure you leave a bite of the tahini ice cream to finish on.",
+      "description": ""
+    }
+  ]
+}
